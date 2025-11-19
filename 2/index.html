@@ -141,6 +141,10 @@
     </style>
 </head>
 <body>
+    <!-- Background Music: Kevin MacLeod - Gymnopedie No 1 -->
+    <audio id="bgm" loop preload="auto">
+        <source src="https://incompetech.com/music/royalty-free/mp3-royaltyfree/Gymnopedie%20No%201.mp3" type="audio/mpeg">
+    </audio>
 
     <!-- API Key Modal -->
     <div id="apikey-modal" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
@@ -307,6 +311,7 @@
         const closeHistoryBtn = document.getElementById('close-history-btn');
         const characterName = document.getElementById('character-name');
         const characterNameContainer = document.getElementById('character-name-container');
+        const bgm = document.getElementById('bgm'); // Audio Element
 
         // Game State
         let gameState = {
@@ -580,7 +585,7 @@ ${luluCharacterProfile}
 **故事开端设定:**
 - **背景:** 大二上学期，一门晚饭后的小班课程。天色已暗，学生们陆续进入小教室。这是玩家和Lulu故事的起点，此时的Lulu完全符合她“初期形象”的描述。
 - **玩家行为:** 玩家（“我”）随意选了教室右侧靠前、背靠窗户的位置坐下。和五六个人围着方形的课桌组成一个小组。
-- **关键情节:** 小组讨论的主题是神经网络，玩家粗略了解过拟合和欠拟合。玩家凭着一知半解的皮毛，夸夸其谈。
+- **关键情节:** 小组讨论的主题是神经网络，我粗略了解过拟合和欠拟合。玩家凭着一知半解的皮毛，夸夸其谈。
 - **Lulu的行为:** 在玩家夸夸其谈时，她完全符合“初期形象”：安静地看着，偶尔声音轻柔地插话，提出一两个问题。
 
 请基于以上设定，生成一个开篇章节，它是一个名为 "chapter" 的JSON数组，包含一系列事件，20-25个左右。事件可以是：{"type": "narration", "content": "旁白内容"} 或“我”和Lulu的对话 {"type": "dialogue", "speaker": "Lulu", "content": "对话内容"}。章节必须以一个选择节点事件结束：{"type": "choice", "luluResponse": "...", "positiveChoice": {"text": "..."}, "negativeChoice": {"text": "..."}}。请直接返回JSON对象，不要包含任何markdown标记。`;
@@ -752,6 +757,8 @@ ${luluCharacterProfile}
             if (gameState.status !== 'not_started') return;
             gameState.status = 'playing';
 
+            // Note: Audio playing logic moved to click event handler for better browser support
+
             updateStatsUI();
             speakBtn.disabled = true;
             generateNextChapter(null, null);
@@ -760,6 +767,13 @@ ${luluCharacterProfile}
         // --- Global Event Listeners ---
         
         startScreen.addEventListener('click', () => {
+            // FIX: Play audio IMMEDIATELY on user interaction to satisfy browser autoplay policies
+            bgm.volume = 0.4;
+            bgm.play().catch(error => {
+                console.error("Audio playback failed:", error);
+                // Optional: Display a small hint if audio fails
+            });
+
             startScreen.style.opacity = '0';
             setTimeout(() => {
                 startScreen.classList.add('hidden');
