@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Galgame - 与Lulu的故事</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            touch-action: manipulation;
+        }
+        .dialogue-box {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .choice-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 105, 180, 0.4);
+        }
+        .speak-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+        }
+        .loading-spinner {
+            border-top-color: #f3f3f3;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .narration-text {
+            font-style: italic;
+            color: #d1d5db; /* text-gray-300 */
+        }
+        #ending-text::-webkit-scrollbar {
+            width: 8px;
+        }
+        #ending-text::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        #ending-text::-webkit-scrollbar-thumb {
+            background: rgba(255, 105, 180, 0.5);
+            border-radius: 10px;
+        }
+        #ending-text::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 105, 180, 0.8);
+        }
+        /* Animation for the "click to start" prompt */
+        @keyframes pulse {
+            50% { opacity: .5; }
+        }
+        .animate-pulse-slow {
+            animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center z-50 cursor-pointer transition-opacity duration-1000">
+        <div class="text-center p-8">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl text-white font-serif leading-relaxed mb-8">
+                在无数次擦肩而过的寻常日子里，<br class="hidden sm:block">错过了无数次本可以开始的机会...
+            </h1>
+            <p class="text-gray-400 animate-pulse-slow">轻触任意处开始</p>
+        </div>
+    </div>
+
+    <!-- Main Game Container (initially hidden) -->
+    <div id="game-container" class="hidden relative min-h-screen w-full flex flex-col items-center justify-end p-4 sm:p-8 transition-opacity duration-500">
+        
+        <div class="absolute top-4 left-4 flex items-center gap-4">
+            <div id="stats-bar" class="bg-black bg-opacity-50 p-3 rounded-lg text-sm sm:text-base shadow-lg">
+                <div>事件序号: <span id="turn-counter">0</span></div>
+                <div>Lulu的好感度: <span id="affection-meter">50</span></div>
+            </div>
+        </div>
+
+        <div id="history-btn" class="absolute top-4 right-4 cursor-pointer p-3 bg-black bg-opacity-50 rounded-full hover:bg-opacity-75 transition-colors z-10" title="对话历史">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+        </div>
+
+        <div class="w-full max-w-4xl">
+            <div class="dialogue-box rounded-xl p-6 shadow-2xl mb-4">
+                <div id="character-name" class="font-bold text-2xl text-pink-300 mb-2">Lulu</div>
+                <div id="dialogue-text" class="text-lg h-24 sm:h-32 overflow-y-auto">
+                    在记忆的缝隙中搜寻另一种可能...
+                </div>
+            </div>
+        </div>
+
+        <div id="player-actions" class="w-full max-w-4xl flex flex-col items-center">
+            <button id="speak-btn" class="speak-btn w-full md:w-1/2 bg-blue-500 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-600 transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="speak-prompt">继续</span>
+            </button>
+            <div id="choices-container" class="w-full md:w-3/4 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <div id="loading-indicator" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div class="flex flex-col items-center">
+                <div class="loading-spinner w-16 h-16 border-4 border-pink-400 rounded-full"></div>
+                <p class="mt-4 text-xl">命运的丝线正在重新编织...</p>
+            </div>
+        </div>
+
+        <div id="ending-screen" class="hidden fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-40 p-4 sm:p-8 text-center">
+            <h2 id="ending-title" class="text-4xl font-bold mb-6 text-pink-300"></h2>
+            <p id="ending-text" class="text-xl max-w-3xl mb-8 leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-[60vh] bg-black bg-opacity-20 p-4 rounded-lg text-left"></p>
+            <button onclick="location.reload()" class="bg-pink-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-pink-600 transition-colors mt-4">重新开始故事</button>
+        </div>
+
+        <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+            <div class="bg-gray-800 w-full max-w-2xl max-h-[80vh] rounded-lg shadow-xl flex flex-col">
+                <div class="flex justify-between items-center p-4 border-b border-gray-700 sticky top-0 bg-gray-800">
+                    <h3 class="text-xl font-bold text-pink-300">对话历史</h3>
+                    <button id="close-history-btn" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+                </div>
+                <div id="history-content" class="p-6 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const startScreen = document.getElementById('start-screen');
+        const gameContainer = document.getElementById('game-container');
+        const turnCounter = document.getElementById('turn-counter');
+        const affectionMeter = document.getElementById('affection-meter');
+        const dialogueText = document.getElementById('dialogue-text');
+        const speakBtn = document.getElementById('speak-btn');
+        const speakPrompt = document.getElementById('speak-prompt');
+        const choicesContainer = document.getElementById('choices-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const endingScreen = document.getElementById('ending-screen');
+        const endingTitle = document.getElementById('ending-title');
+        const endingText = document.getElementById('ending-text');
+        const historyBtn = document.getElementById('history-btn');
+        const historyModal = document.getElementById('history-modal');
+        const historyContent = document.getElementById('history-content');
+        const closeHistoryBtn = document.getElementById('close-history-btn');
+        const characterName = document.getElementById('character-name');
+
+        // Game State
+        let gameState = {
+            turn: 0,
+            affection: 50,
+            eventHistory: [],
+            eventQueue: [],
+            status: 'not_started', // 'not_started', 'playing', 'ending_sequence', 'ended'
+        };
+
+        // IMPORTANT: You need to fill in your Gemini API key here to run the game.
+        const API_KEY = "AIzaSyADdZa4vNJdDSwzJ_8fKS4Lmy6KRkq9TnQ"; 
+
+        async function callGemini(history) {
+            loadingIndicator.classList.remove('hidden');
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+            const payload = { contents: history };
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw new Error(`API请求失败: ${response.status}. 详情: ${errorBody}`);
+                }
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    const startIndex = text.indexOf('{');
+                    const endIndex = text.lastIndexOf('}');
+                    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+                        console.error("No valid JSON object found in the response text:", text);
+                        throw new Error("API响应中未找到有效的JSON对象。");
+                    }
+                    const jsonString = text.substring(startIndex, endIndex + 1);
+                    try {
+                        return JSON.parse(jsonString);
+                    } catch (parseError) {
+                        console.error("解析提取的JSON字符串时出错:", parseError);
+                        console.error("原始字符串:", text);
+                        console.error("提取的字符串:", jsonString);
+                        throw new Error("无法解析API返回的JSON数据。");
+                    }
+                } else { 
+                    console.error("API响应无效:", result);
+                    throw new Error("从API收到了无效的响应结构。"); 
+                }
+            } catch (error) {
+                console.error("调用Gemini API时出错:", error);
+                dialogueText.textContent = `发生错误: ${error.message}。请检查API密钥是否正确填写，然后刷新页面重试。`;
+                speakBtn.disabled = true;
+                return null;
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        function updateStatsUI() {
+            turnCounter.textContent = gameState.turn;
+            affectionMeter.textContent = gameState.affection;
+        }
+
+        function processNextEvent() {
+            if (gameState.eventQueue.length === 0) {
+                if (gameState.status === 'ending_sequence') {
+                    triggerEnding(gameState.affection >= 100 ? 'he' : 'be');
+                }
+                return;
+            }
+
+            const event = gameState.eventQueue.shift();
+            gameState.turn++;
+            updateStatsUI();
+            addToHistory(event);
+            dialogueText.classList.remove('narration-text');
+
+            switch (event.type) {
+                case 'narration':
+                case 'dialogue':
+                    characterName.style.display = event.type === 'narration' ? 'none' : 'block';
+                    if(event.speaker) characterName.textContent = event.speaker;
+                    dialogueText.textContent = event.content;
+                    if(event.type === 'narration') dialogueText.classList.add('narration-text');
+                    speakBtn.style.display = 'block';
+                    choicesContainer.style.display = 'none';
+                    speakPrompt.textContent = '继续';
+                    speakBtn.disabled = false;
+                    break;
+                case 'choice':
+                    characterName.style.display = 'block';
+                    characterName.textContent = 'Lulu';
+                    dialogueText.textContent = event.luluResponse;
+                    speakBtn.style.display = 'none';
+                    choicesContainer.innerHTML = '';
+                    const positiveBtn = createChoiceButton(event.positiveChoice.text, 'positive');
+                    const negativeBtn = createChoiceButton(event.negativeChoice.text, 'negative');
+                    choicesContainer.appendChild(positiveBtn);
+                    choicesContainer.appendChild(negativeBtn);
+                    choicesContainer.style.display = 'grid';
+                    break;
+                default:
+                    console.error('未知的事件类型:', event);
+                    handleSpeak(); 
+                    break;
+            }
+        }
+
+        function handleSpeak() {
+            if (speakBtn.disabled) return;
+            speakBtn.disabled = true;
+
+            if (gameState.eventQueue.length > 0) {
+                processNextEvent();
+            } else {
+                if (gameState.status === 'ending_sequence') {
+                    triggerEnding(gameState.affection >= 100 ? 'he' : 'be');
+                } else {
+                    console.warn("Button clicked when event queue is empty and not in ending sequence.");
+                    generateNextChapter('继续', 'neutral');
+                }
+            }
+        }
+
+        async function handleChoice(choiceText, choiceType) {
+            choicesContainer.innerHTML = '';
+            addToHistory({ type: 'playerChoice', content: choiceText });
+            await generateNextChapter(choiceText, choiceType);
+        }
+
+        async function generateNextChapter(playerChoice = null, choiceType = null) {
+            if (gameState.status === 'ending_sequence' || gameState.status === 'ended') return;
+
+            let prompt;
+            const historyForPrompt = JSON.stringify(gameState.eventHistory.slice(-10)); 
+            
+            const luluCharacterProfile = `
+Lulu是一个外表和内心存在微妙变化和层次感的女孩子。
+- **初期形象 (大二上学期):** 安静，讨论时很少说话，给人一种高中生般的青涩感和距离感。玩家初期对她没有特别关注。她就像一个普通的、有点内向的“小女生”。
+- **气质演变 (大二至大三):** 她的气质逐渐从青涩转变为清爽、随性。这体现在：
+  - **穿着:** 开始偏爱优衣库风格的简约休闲衬衫。
+  - **发型:** 将原本的棕色长发染成了更有个性的蓝灰色。
+  - **核心不变:** 尽管外在变化，她优美的核心气质没有变。
+- **隐藏的关键背景:** 在玩家没有察觉的时候，Lulu已经有了一段感情。这一点是整个故事的潜在暗线，解释了她行为的很多动机。你的任务是 subtly 地在剧情中体现这一点，而不是直接说出来。随着和玩家的好感度的提高，这一点会逐渐淡化。
+`;
+
+            if (playerChoice === null) {
+                prompt = `你是一个浪漫Galgame的剧情生成器。请严格遵循以下角色和故事设定。
+
+**女主角核心设定:**
+${luluCharacterProfile}
+
+**故事开端设定:**
+- **背景:** 大二上学期，一门晚饭后的小班课程。天色已暗，学生们陆续进入小教室。这是玩家和Lulu故事的起点，此时的Lulu完全符合她“初期形象”的描述。
+- **玩家行为:** 玩家（“我”）随意选了教室右侧靠前、背靠窗户的位置坐下。和五六个人围着方形的课桌组成一个小组。
+- **关键情节:** 小组讨论的主题是神经网络，玩家粗略了解过拟合和欠拟合。玩家凭着一知半解的皮毛，夸夸其谈。
+- **Lulu的行为:** 在玩家夸夸其谈时，她完全符合“初期形象”：安静地看着，偶尔声音轻柔地插话，提出一两个问题。
+
+请基于以上设定，生成一个开篇章节，它是一个名为 "chapter" 的JSON数组，包含一系列事件，20-25个左右。事件可以是：{"type": "narration", "content": "旁白内容"} 或“我”和Lulu的对话 {"type": "dialogue", "speaker": "Lulu", "content": "对话内容"}。章节必须以一个选择节点事件结束：{"type": "choice", "luluResponse": "...", "positiveChoice": {"text": "..."}, "negativeChoice": {"text": "..."}}。请直接返回JSON对象，不要包含任何markdown标记。`;
+            } else {
+                prompt = `你是一个Galgame剧情生成器。
+
+**女主角核心设定 (必须遵守):**
+${luluCharacterProfile}
+
+**当前情境:**
+这是最近的事件历史: ${historyForPrompt}。玩家刚刚做出了一个“${choiceType === 'positive' ? '正面' : '负面'}”的关键选择: "${playerChoice}"。
+
+**你的任务:**
+请遵循以下步骤生成一个新章节 (名为 "chapter" 的JSON数组):
+1.  生成Lulu对此选择的反应。这个反应要符合她的核心设定，尤其是她“隐藏的关键背景”。她可能因为自己的感情状态而对玩家的选择有不同于表面的解读。
+2.  根据这是一个“${choiceType === 'positive' ? '正面' : '负面'}”选择，决定一个具体的好感度变化值（正面则增加5到15，负面则减少5到15）。
+3.  生成一系列新的关于“我”和Lulu的narration和dialogue事件来推进剧情（10-15个事件左右）。在推进剧情时，要逐渐展现Lulu的“气质演变”，并且 subtly 地暗示她的“隐藏背景”。禁止涉及专业知识的讨论。
+4.  最后以一个新的choice节点事件结束本章节。
+
+请以JSON格式回应: {"affectionChange": ..., "chapter": [...]}. 请直接返回JSON对象，不要包含任何markdown标记。`;
+            }
+
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            if (!response) return;
+
+            if (playerChoice) {
+                gameState.affection += response.affectionChange || 0;
+                gameState.affection = Math.max(0, Math.min(100, gameState.affection));
+                updateStatsUI();
+
+                const chapterEvents = response.chapter || [];
+
+                if (gameState.affection <= 0 || gameState.affection >= 100) {
+                    gameState.status = 'ending_sequence';
+                    const chapterWithoutChoice = chapterEvents.filter(event => event.type !== 'choice');
+                    gameState.eventQueue.push(...chapterWithoutChoice);
+                    await generateEndingChapter();
+                } else {
+                    gameState.eventQueue.push(...chapterEvents);
+                }
+            } else {
+                gameState.eventQueue.push(...(response.chapter || []));
+            }
+            
+            setTimeout(processNextEvent, 100);
+        }
+
+        async function generateEndingChapter() {
+            const endingType = gameState.affection >= 100 ? 'Happy Ending' : 'Bad Ending';
+            const prompt = `故事即将结束。当前是'${endingType}'的路线。Lulu的好感度是 ${gameState.affection}。请生成一个非常简短的最终章节（2-3个事件），作为导向最终结局的过渡。事件可以是：{"type": "narration", "content": "旁白内容"} 或“我”和Lulu的对话 {"type": "dialogue", "speaker": "Lulu", "content": "对话内容"}。请以JSON格式回应: {"endingChapter": [...]}`;
+            
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            
+            if (response && response.endingChapter && Array.isArray(response.endingChapter)) {
+                gameState.eventQueue.push(...response.endingChapter);
+            } else {
+                console.warn("Could not generate ending chapter, using fallback.");
+                gameState.eventQueue.push({
+                    type: 'narration',
+                    content: '命运的丝线在此刻收束，一切即将尘埃落定...'
+                });
+            }
+        }
+        
+        async function triggerEnding(type) {
+            if (gameState.status === 'ended') return;
+            gameState.status = 'ended';
+            const endingType = type === 'he' ? 'Happy Ending' : 'Bad Ending';
+            const historyForPrompt = JSON.stringify(gameState.eventHistory);
+
+            const prompt = `故事已经到达了终点。这是一个'${endingType}'。Lulu的最终好感度是 ${gameState.affection}。请你现在化身为一位出色的言情小说家，基于我们共同经历的整个故事（事件历史: ${historyForPrompt}），用一个长长的、富有文采和情感深度的段落，来详细描绘“我”和Lulu在故事结束后的未来。如果这是 Happy Ending，请描述我们如何从暧昧走向恋爱，甚至步入婚姻的殿堂，描绘一些甜蜜的未来生活片段。如果这是 Bad Ending，请描述我们如何渐行渐远，最终形同陌路，留下无尽的遗憾和对往昔的追忆。你的描述需要至少200字，并且情感真挚，能让玩家深刻感受到这个结局的氛围。请以JSON格式回应: {"endingTitle": "${endingType}", "endingDescription": "详细的结局描述..."}。请直接返回JSON对象，不要包含任何markdown标记。`;
+            
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            
+            if (response) {
+                endingTitle.textContent = response.endingTitle || endingType;
+                endingText.textContent = response.endingDescription || "故事走到了终点...";
+                endingScreen.classList.remove('hidden');
+            } else {
+                endingTitle.textContent = endingType;
+                endingText.textContent = "故事的结局，需要你来想象...";
+                endingScreen.classList.remove('hidden');
+            }
+        }
+
+        function createChoiceButton(text, choiceType) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = 'choice-btn bg-pink-500 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-pink-600 transition-all duration-300 ease-in-out';
+            button.onclick = () => handleChoice(text, choiceType);
+            return button;
+        }
+
+        function addToHistory(event) {
+            gameState.eventHistory.push(event);
+        }
+
+        function getHistoryWithPrompt(finalPrompt) {
+            return [{ role: 'user', parts: [{ text: finalPrompt }] }];
+        }
+
+        function renderHistory() {
+            historyContent.innerHTML = '';
+            gameState.eventHistory.forEach(event => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'mb-4 text-left';
+                let speakerSpan, textP;
+
+                switch (event.type) {
+                    case 'narration':
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-400 italic';
+                        textP.textContent = event.content;
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'dialogue':
+                        speakerSpan = document.createElement('span');
+                        speakerSpan.className = 'font-bold block text-pink-300';
+                        speakerSpan.textContent = `${event.speaker}:`;
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-300 pl-1 mt-1';
+                        textP.textContent = event.content;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'choice':
+                        speakerSpan = document.createElement('span');
+                        speakerSpan.className = 'font-bold block text-pink-300';
+                        speakerSpan.textContent = 'Lulu:';
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-300 pl-1 mt-1';
+                        textP.textContent = event.luluResponse;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'playerChoice':
+                        speakerSpan = document.createElement('span');
+                        speakerSpan.className = 'font-bold block text-blue-300';
+                        speakerSpan.textContent = '我:';
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-300 pl-1 mt-1';
+                        textP.textContent = event.content;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                }
+                if (entryDiv.hasChildNodes()) {
+                    historyContent.appendChild(entryDiv);
+                }
+            });
+            historyContent.scrollTop = historyContent.scrollHeight;
+        }
+
+        function toggleHistoryModal() {
+            if (historyModal.classList.contains('hidden')) {
+                renderHistory();
+                historyModal.classList.remove('hidden');
+            } else {
+                historyModal.classList.add('hidden');
+            }
+        }
+        
+        function initGame() {
+            if (gameState.status !== 'not_started') return;
+            gameState.status = 'playing';
+
+            updateStatsUI();
+            speakBtn.disabled = true;
+            generateNextChapter(null, null);
+        }
+
+        // Event Listeners
+        startScreen.addEventListener('click', () => {
+            startScreen.classList.add('opacity-0');
+            startScreen.addEventListener('transitionend', () => {
+                startScreen.classList.add('hidden');
+                gameContainer.classList.remove('hidden');
+                initGame();
+            }, { once: true });
+        });
+
+        speakBtn.addEventListener('click', handleSpeak);
+        historyBtn.addEventListener('click', toggleHistoryModal);
+        closeHistoryBtn.addEventListener('click', toggleHistoryModal);
+        historyModal.addEventListener('click', (event) => {
+            if (event.target === historyModal) {
+                toggleHistoryModal();
+            }
+        });
+
+    </script>
+</body>
+</html>
