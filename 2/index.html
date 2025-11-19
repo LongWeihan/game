@@ -1,1 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gemini Galgame - 与Lulu的故事</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-pink: #ec4899;
+            --glass-bg: rgba(30, 41, 59, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.4) 0%, transparent 25%), 
+                radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.2) 0%, transparent 25%);
+            background-size: cover;
+            background-attachment: fixed;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+            user-select: none;
+        }
 
+        /* Galgame Dialogue Box */
+        .vn-textbox {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid var(--glass-border);
+            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Name Tag */
+        .name-tag {
+            background: linear-gradient(90deg, var(--primary-pink) 0%, #8b5cf6 100%);
+            clip-path: polygon(0 0, 100% 0, 95% 100%, 0% 100%);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        /* Typography */
+        .serif-font {
+            font-family: 'Noto Serif SC', serif;
+        }
+        
+        /* Cursor for typewriter */
+        .cursor-blink::after {
+            content: '▋';
+            display: inline-block;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+            color: var(--primary-pink);
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Choice Buttons */
+        .choice-btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .choice-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--primary-pink);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .choice-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+            border-color: rgba(236, 72, 153, 0.5);
+        }
+        .choice-btn:hover::before {
+            opacity: 1;
+        }
+
+        /* Scrollbar for history/ending */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        /* Animations */
+        .fade-in { animation: fadeIn 0.8s ease-in forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .slide-up { animation: slideUp 0.5s ease-out forwards; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 3px solid #FFF;
+            border-radius: 50%;
+            display: inline-block;
+            position: relative;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        .loader::after {
+            content: '';  
+            box-sizing: border-box;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid;
+            border-color: #ec4899 transparent;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- API Key Modal -->
+    <div id="apikey-modal" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+            <h2 class="text-2xl font-serif text-white mb-6 text-center">System Configuration</h2>
+            <p class="text-gray-400 text-sm mb-4">请输入您的 Google Gemini API Key 以启动故事。<br>建议使用支持 <span class="text-pink-400">gemini-2.0-flash</span> 的 Key。</p>
+            <input type="password" id="api-key-input" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-colors mb-6 placeholder-gray-600" placeholder="AIzaSy..." autocomplete="off">
+            <button id="save-key-btn" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
+                连接神经元
+            </button>
+            <p id="api-error" class="text-red-400 text-xs mt-3 hidden text-center"></p>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center cursor-pointer transition-opacity duration-1000 bg-black">
+        <div class="absolute inset-0 opacity-30 bg-[url('https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center filter blur-sm"></div>
+        <div class="relative z-10 text-center p-8">
+            <h1 class="text-4xl md:text-6xl text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-purple-300 font-serif mb-8 tracking-widest shadow-lg fade-in">
+                记忆缝隙
+            </h1>
+            <div class="h-px w-32 bg-gradient-to-r from-transparent via-pink-500 to-transparent mx-auto mb-8"></div>
+            <p class="text-gray-300 text-lg md:text-xl font-light leading-relaxed fade-in" style="animation-delay: 0.5s">
+                在无数次擦肩而过的寻常日子里，<br>
+                错过了无数次本可以开始的机会...
+            </p>
+            <p class="mt-12 text-sm text-gray-500 animate-pulse tracking-[0.2em]">TOUCH TO START</p>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div id="game-container" class="hidden relative w-full h-full overflow-hidden fade-in">
+        
+        <!-- Background Element (for potential dynamic changing) -->
+        <div class="absolute inset-0 z-0 bg-gradient-to-b from-slate-900 to-slate-800">
+            <!-- Decorative circles -->
+            <div class="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-purple-900 opacity-20 blur-[100px]"></div>
+            <div class="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-pink-900 opacity-20 blur-[100px]"></div>
+        </div>
+
+        <!-- Top HUD -->
+        <div class="absolute top-0 left-0 w-full p-4 z-10 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent h-24">
+            <!-- Stats -->
+            <div class="flex gap-4 items-center">
+                <div class="bg-black/40 backdrop-blur-md rounded-full px-4 py-1 border border-white/10 flex items-center gap-3">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider">Turn</div>
+                    <span id="turn-counter" class="text-white font-mono font-bold text-lg">0</span>
+                </div>
+                <div class="bg-black/40 backdrop-blur-md rounded-full px-4 py-1 border border-white/10 flex items-center gap-3">
+                    <div class="text-xs text-pink-400 uppercase tracking-wider">Love</div>
+                    <div class="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div id="affection-bar" class="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-1000" style="width: 50%"></div>
+                    </div>
+                    <span id="affection-meter" class="text-pink-300 font-mono font-bold">50</span>
+                </div>
+            </div>
+
+            <!-- Menu Buttons -->
+            <button id="history-btn" class="p-2 rounded-full hover:bg-white/10 transition-colors text-gray-300 hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Main Visual Area (Center - for Choices/Events) -->
+        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none">
+            <!-- Choices Container (Clickable) -->
+            <div id="choices-container" class="pointer-events-auto w-full max-w-3xl px-6 flex flex-col gap-4 transition-all duration-500 opacity-0 transform scale-95 hidden">
+                <!-- Buttons injected by JS -->
+            </div>
+        </div>
+
+        <!-- Dialogue Box (Bottom) -->
+        <div class="absolute bottom-0 left-0 w-full z-20">
+            <!-- Character Name Tag (Floating above box) -->
+            <div class="container max-w-5xl mx-auto px-4 relative">
+                <div id="character-name-container" class="absolute -top-10 left-4 sm:left-8 opacity-0 transition-opacity duration-300">
+                    <div id="character-name" class="name-tag text-white font-bold text-xl px-8 py-1.5 tracking-wide shadow-lg">
+                        Lulu
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Text Area -->
+            <div class="vn-textbox w-full h-[28vh] min-h-[200px] flex flex-col">
+                <div class="container max-w-5xl mx-auto px-6 py-6 h-full flex flex-col relative">
+                    
+                    <!-- Text Content -->
+                    <div id="dialogue-text" class="text-lg md:text-xl leading-relaxed text-gray-100 font-light flex-grow cursor-pointer select-none">
+                        <!-- Text injected by JS -->
+                    </div>
+                    
+                    <!-- Continue Indicator / Click Area -->
+                    <div id="speak-btn-container" class="absolute bottom-4 right-6 flex items-center gap-2 opacity-0 transition-opacity duration-300">
+                         <span class="text-xs text-gray-500 uppercase tracking-widest animate-pulse">Click to continue</span>
+                         <div class="w-3 h-3 bg-pink-500 transform rotate-45 animate-bounce"></div>
+                    </div>
+
+                    <!-- Hidden button for logic retention, replaced by full-box click -->
+                    <button id="speak-btn" class="hidden"></button> 
+                    <span id="speak-prompt" class="hidden">继续</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-indicator" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center">
+            <span class="loader mb-4"></span>
+            <p class="text-pink-200 font-serif tracking-widest text-sm uppercase">Weaving Destiny...</p>
+        </div>
+
+        <!-- Ending Screen -->
+        <div id="ending-screen" class="hidden fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center p-6 md:p-12 text-center transition-opacity duration-1000">
+            <div class="max-w-4xl w-full border-y border-gray-800 py-12 bg-gradient-to-b from-gray-900 to-black relative">
+                <h2 id="ending-title" class="text-5xl md:text-6xl font-serif font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-indigo-400 pb-2"></h2>
+                <div class="h-px w-24 bg-gray-700 mx-auto mb-8"></div>
+                <div id="ending-text" class="text-lg md:text-xl text-gray-300 leading-loose whitespace-pre-wrap overflow-y-auto max-h-[50vh] px-4 font-light font-serif"></div>
+                <button onclick="location.reload()" class="mt-12 px-8 py-3 border border-gray-600 text-gray-400 hover:text-white hover:border-white transition-all uppercase tracking-widest text-sm">
+                    Reincarnate (Restart)
+                </button>
+            </div>
+        </div>
+
+        <!-- History Modal -->
+        <div id="history-modal" class="hidden fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-8">
+            <div class="bg-slate-900 w-full max-w-4xl h-[85vh] rounded-xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden slide-up">
+                <div class="flex justify-between items-center p-6 border-b border-slate-700 bg-slate-800">
+                    <h3 class="text-2xl font-serif text-pink-300 tracking-widest">MEMORY LOG</h3>
+                    <button id="close-history-btn" class="text-gray-500 hover:text-white transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div id="history-content" class="flex-1 p-8 overflow-y-auto space-y-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Logic & State Management ---
+
+        // DOM Elements
+        const apiKeyModal = document.getElementById('apikey-modal');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const saveKeyBtn = document.getElementById('save-key-btn');
+        const apiError = document.getElementById('api-error');
+
+        const startScreen = document.getElementById('start-screen');
+        const gameContainer = document.getElementById('game-container');
+        const turnCounter = document.getElementById('turn-counter');
+        const affectionMeter = document.getElementById('affection-meter');
+        const affectionBar = document.getElementById('affection-bar');
+        const dialogueText = document.getElementById('dialogue-text');
+        const speakBtn = document.getElementById('speak-btn'); // Logic button (hidden)
+        const speakBtnContainer = document.getElementById('speak-btn-container'); // Visual indicator
+        const choicesContainer = document.getElementById('choices-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const endingScreen = document.getElementById('ending-screen');
+        const endingTitle = document.getElementById('ending-title');
+        const endingText = document.getElementById('ending-text');
+        const historyBtn = document.getElementById('history-btn');
+        const historyModal = document.getElementById('history-modal');
+        const historyContent = document.getElementById('history-content');
+        const closeHistoryBtn = document.getElementById('close-history-btn');
+        const characterName = document.getElementById('character-name');
+        const characterNameContainer = document.getElementById('character-name-container');
+
+        // Game State
+        let gameState = {
+            turn: 0,
+            affection: 50,
+            eventHistory: [],
+            eventQueue: [],
+            status: 'not_started', 
+        };
+
+        let USER_API_KEY = "";
+        
+        // Typewriter State
+        let typeWriterState = {
+            text: "",
+            index: 0,
+            isTyping: false,
+            timeoutId: null,
+            resolvePromise: null
+        };
+
+        // --- API Key Handling ---
+        
+        apiKeyInput.addEventListener('input', (e) => {
+            saveKeyBtn.disabled = e.target.value.trim().length === 0;
+        });
+
+        saveKeyBtn.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if (key) {
+                USER_API_KEY = key;
+                apiKeyModal.classList.add('hidden');
+                startScreen.classList.remove('hidden');
+            }
+        });
+
+        // --- API Calls ---
+
+        async function callGemini(history) {
+            loadingIndicator.classList.remove('hidden');
+            // Use User's Key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${USER_API_KEY}`;
+            const payload = { contents: history };
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw new Error(`API请求失败: ${response.status}. 详情: ${errorBody}`);
+                }
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    const startIndex = text.indexOf('{');
+                    const endIndex = text.lastIndexOf('}');
+                    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+                        throw new Error("API响应中未找到有效的JSON对象。");
+                    }
+                    const jsonString = text.substring(startIndex, endIndex + 1);
+                    try {
+                        return JSON.parse(jsonString);
+                    } catch (parseError) {
+                        console.error("JSON Parse Error", parseError, text);
+                        throw new Error("无法解析API返回的JSON数据。");
+                    }
+                } else { 
+                    throw new Error("从API收到了无效的响应结构。"); 
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                dialogueText.innerHTML = `<span class="text-red-400">系统错误: ${error.message}。请刷新重试或检查API KEY。</span>`;
+                speakBtn.disabled = true;
+                return null;
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        // --- UI & Animation Functions ---
+
+        function updateStatsUI() {
+            turnCounter.textContent = gameState.turn;
+            affectionMeter.textContent = gameState.affection;
+            affectionBar.style.width = `${Math.max(0, Math.min(100, gameState.affection))}%`;
+            
+            // Color change based on affection
+            if(gameState.affection > 75) affectionBar.className = "h-full bg-gradient-to-r from-pink-500 to-red-500 transition-all duration-1000";
+            else if(gameState.affection < 30) affectionBar.className = "h-full bg-gradient-to-r from-gray-500 to-blue-900 transition-all duration-1000";
+            else affectionBar.className = "h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-1000";
+        }
+
+        // Typewriter Effect Logic
+        function typeText(text, element) {
+            return new Promise((resolve) => {
+                typeWriterState.text = text;
+                typeWriterState.index = 0;
+                typeWriterState.isTyping = true;
+                typeWriterState.resolvePromise = resolve;
+                element.innerHTML = '<span class="cursor-blink"></span>'; // Clear and add cursor
+                
+                speakBtnContainer.style.opacity = '0'; // Hide continue arrow while typing
+
+                function type() {
+                    if (typeWriterState.index < text.length) {
+                        const char = text.charAt(typeWriterState.index);
+                        element.innerHTML = text.substring(0, typeWriterState.index + 1) + '<span class="cursor-blink"></span>';
+                        typeWriterState.index++;
+                        // Variation in typing speed for natural feel
+                        const speed = Math.random() * 30 + 20; 
+                        typeWriterState.timeoutId = setTimeout(type, speed);
+                    } else {
+                        finishTyping();
+                    }
+                }
+                type();
+            });
+        }
+
+        function finishTyping() {
+            if (typeWriterState.timeoutId) clearTimeout(typeWriterState.timeoutId);
+            dialogueText.innerHTML = typeWriterState.text; // Remove cursor, show full text
+            typeWriterState.isTyping = false;
+            speakBtnContainer.style.opacity = '1'; // Show continue arrow
+            if (typeWriterState.resolvePromise) {
+                typeWriterState.resolvePromise();
+                typeWriterState.resolvePromise = null;
+            }
+        }
+
+        // Click handler for the dialogue box
+        dialogueText.parentElement.addEventListener('click', () => {
+            // If choices are displayed, ignore clicks on textbox
+            if(choicesContainer.style.display === 'flex' && !choicesContainer.classList.contains('hidden')) return;
+
+            if (typeWriterState.isTyping) {
+                finishTyping();
+            } else {
+                handleSpeak();
+            }
+        });
+
+        async function processNextEvent() {
+            if (gameState.eventQueue.length === 0) {
+                if (gameState.status === 'ending_sequence') {
+                    triggerEnding(gameState.affection >= 100 ? 'he' : 'be');
+                }
+                return;
+            }
+
+            const event = gameState.eventQueue.shift();
+            gameState.turn++;
+            updateStatsUI();
+            addToHistory(event);
+
+            // Reset visual states
+            choicesContainer.classList.add('hidden');
+            choicesContainer.style.display = 'none';
+            choicesContainer.classList.remove('opacity-100', 'scale-100');
+            
+            // Default Logic
+            let textToDisplay = event.content;
+            let speakerName = null;
+
+            switch (event.type) {
+                case 'narration':
+                    characterNameContainer.style.opacity = '0';
+                    // Italic or different color for narration
+                    dialogueText.className = "text-lg md:text-xl leading-relaxed text-gray-400 italic flex-grow cursor-pointer select-none";
+                    speakBtn.disabled = false;
+                    break;
+                
+                case 'dialogue':
+                    characterNameContainer.style.opacity = '1';
+                    speakerName = event.speaker || '???';
+                    characterName.textContent = speakerName;
+                    dialogueText.className = "text-lg md:text-xl leading-relaxed text-white font-normal flex-grow cursor-pointer select-none";
+                    speakBtn.disabled = false;
+                    break;
+                
+                case 'choice':
+                    characterNameContainer.style.opacity = '1';
+                    characterName.textContent = 'Lulu';
+                    textToDisplay = event.luluResponse;
+                    dialogueText.className = "text-lg md:text-xl leading-relaxed text-white font-normal flex-grow cursor-pointer select-none";
+                    
+                    // Don't enable speak button for choices, we need to render buttons after typing
+                    speakBtn.disabled = true; 
+                    break;
+            }
+
+            // Start Typewriter
+            await typeText(textToDisplay, dialogueText);
+
+            // Post-Typing Actions
+            if (event.type === 'choice') {
+                renderChoices(event);
+            }
+        }
+
+        function renderChoices(event) {
+            choicesContainer.innerHTML = '';
+            choicesContainer.style.display = 'flex';
+            choicesContainer.classList.remove('hidden');
+            
+            // Small delay for animation
+            setTimeout(() => {
+                choicesContainer.classList.add('opacity-100', 'scale-100');
+            }, 50);
+
+            const positiveBtn = createChoiceButton(event.positiveChoice.text, 'positive');
+            const negativeBtn = createChoiceButton(event.negativeChoice.text, 'negative');
+            
+            choicesContainer.appendChild(positiveBtn);
+            choicesContainer.appendChild(negativeBtn);
+            
+            // Hide the "next" arrow since we need to pick a choice
+            speakBtnContainer.style.opacity = '0';
+        }
+
+        function handleSpeak() {
+            if (speakBtn.disabled) return;
+            speakBtn.disabled = true;
+
+            if (gameState.eventQueue.length > 0) {
+                processNextEvent();
+            } else {
+                if (gameState.status === 'ending_sequence') {
+                    triggerEnding(gameState.affection >= 100 ? 'he' : 'be');
+                } else {
+                    // Need to generate more content
+                    generateNextChapter('继续', 'neutral');
+                }
+            }
+        }
+
+        async function handleChoice(choiceText, choiceType) {
+            choicesContainer.classList.remove('opacity-100', 'scale-100');
+            setTimeout(() => {
+                choicesContainer.classList.add('hidden');
+                choicesContainer.style.display = 'none';
+            }, 300);
+            
+            addToHistory({ type: 'playerChoice', content: choiceText });
+            await generateNextChapter(choiceText, choiceType);
+        }
+
+        // --- Core Game Logic (Unchanged Prompts) ---
+
+        async function generateNextChapter(playerChoice = null, choiceType = null) {
+            if (gameState.status === 'ending_sequence' || gameState.status === 'ended') return;
+
+            let prompt;
+            // Using limited history for context window efficiency
+            const historyForPrompt = JSON.stringify(gameState.eventHistory.slice(-10)); 
+            
+            const luluCharacterProfile = `
+Lulu是一个外表和内心存在微妙变化和层次感的女孩子。
+- **初期形象 (大二上学期):** 安静，讨论时很少说话，给人一种高中生般的青涩感和距离感。玩家初期对她没有特别关注。她就像一个普通的、有点内向的“小女生”。
+- **气质演变 (大二至大三):** 她的气质逐渐从青涩转变为清爽、随性。这体现在：
+  - **穿着:** 开始偏爱优衣库风格的简约休闲衬衫。
+  - **发型:** 将原本的棕色长发染成了更有个性的蓝灰色。
+  - **核心不变:** 尽管外在变化，她优美的核心气质没有变。
+- **隐藏的关键背景:** 在玩家没有察觉的时候，Lulu已经有了一段感情。这一点是整个故事的潜在暗线，解释了她行为的很多动机。你的任务是 subtly 地在剧情中体现这一点，而不是直接说出来。随着和玩家的好感度的提高，这一点会逐渐淡化。
+`;
+
+            if (playerChoice === null) {
+                prompt = `你是一个浪漫Galgame的剧情生成器。请严格遵循以下角色和故事设定。
+
+**女主角核心设定:**
+${luluCharacterProfile}
+
+**故事开端设定:**
+- **背景:** 大二上学期，一门晚饭后的小班课程。天色已暗，学生们陆续进入小教室。这是玩家和Lulu故事的起点，此时的Lulu完全符合她“初期形象”的描述。
+- **玩家行为:** 玩家（“我”）随意选了教室右侧靠前、背靠窗户的位置坐下。和五六个人围着方形的课桌组成一个小组。
+- **关键情节:** 小组讨论的主题是神经网络，玩家粗略了解过拟合和欠拟合。玩家凭着一知半解的皮毛，夸夸其谈。
+- **Lulu的行为:** 在玩家夸夸其谈时，她完全符合“初期形象”：安静地看着，偶尔声音轻柔地插话，提出一两个问题。
+
+请基于以上设定，生成一个开篇章节，它是一个名为 "chapter" 的JSON数组，包含一系列事件，20-25个左右。事件可以是：{"type": "narration", "content": "旁白内容"} 或“我”和Lulu的对话 {"type": "dialogue", "speaker": "Lulu", "content": "对话内容"}。章节必须以一个选择节点事件结束：{"type": "choice", "luluResponse": "...", "positiveChoice": {"text": "..."}, "negativeChoice": {"text": "..."}}。请直接返回JSON对象，不要包含任何markdown标记。`;
+            } else {
+                prompt = `你是一个Galgame剧情生成器。
+
+**女主角核心设定 (必须遵守):**
+${luluCharacterProfile}
+
+**当前情境:**
+这是最近的事件历史: ${historyForPrompt}。玩家刚刚做出了一个“${choiceType === 'positive' ? '正面' : '负面'}”的关键选择: "${playerChoice}"。
+
+**你的任务:**
+请遵循以下步骤生成一个新章节 (名为 "chapter" 的JSON数组):
+1.  生成Lulu对此选择的反应。这个反应要符合她的核心设定，尤其是她“隐藏的关键背景”。她可能因为自己的感情状态而对玩家的选择有不同于表面的解读。
+2.  根据这是一个“${choiceType === 'positive' ? '正面' : '负面'}”选择，决定一个具体的好感度变化值（正面则增加5到15，负面则减少5到15）。
+3.  生成一系列新的关于“我”和Lulu的narration和dialogue事件来推进剧情（10-15个事件左右）。在推进剧情时，要逐渐展现Lulu的“气质演变”，并且 subtly 地暗示她的“隐藏背景”。禁止涉及专业知识的讨论。
+4.  最后以一个新的choice节点事件结束本章节。
+
+请以JSON格式回应: {"affectionChange": ..., "chapter": [...]}. 请直接返回JSON对象，不要包含任何markdown标记。`;
+            }
+
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            if (!response) return;
+
+            if (playerChoice) {
+                gameState.affection += response.affectionChange || 0;
+                gameState.affection = Math.max(0, Math.min(100, gameState.affection));
+                updateStatsUI();
+
+                const chapterEvents = response.chapter || [];
+
+                if (gameState.affection <= 0 || gameState.affection >= 100) {
+                    gameState.status = 'ending_sequence';
+                    const chapterWithoutChoice = chapterEvents.filter(event => event.type !== 'choice');
+                    gameState.eventQueue.push(...chapterWithoutChoice);
+                    await generateEndingChapter();
+                } else {
+                    gameState.eventQueue.push(...chapterEvents);
+                }
+            } else {
+                gameState.eventQueue.push(...(response.chapter || []));
+            }
+            
+            // If queue was empty, trigger next event immediately
+            if (!typeWriterState.isTyping && gameState.eventQueue.length > 0) {
+                processNextEvent();
+            }
+        }
+
+        async function generateEndingChapter() {
+            const endingType = gameState.affection >= 100 ? 'Happy Ending' : 'Bad Ending';
+            const prompt = `故事即将结束。当前是'${endingType}'的路线。Lulu的好感度是 ${gameState.affection}。请生成一个非常简短的最终章节（2-3个事件），作为导向最终结局的过渡。事件可以是：{"type": "narration", "content": "旁白内容"} 或“我”和Lulu的对话 {"type": "dialogue", "speaker": "Lulu", "content": "对话内容"}。请以JSON格式回应: {"endingChapter": [...]}`;
+            
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            
+            if (response && response.endingChapter && Array.isArray(response.endingChapter)) {
+                gameState.eventQueue.push(...response.endingChapter);
+            } else {
+                gameState.eventQueue.push({
+                    type: 'narration',
+                    content: '命运的丝线在此刻收束，一切即将尘埃落定...'
+                });
+            }
+        }
+        
+        async function triggerEnding(type) {
+            if (gameState.status === 'ended') return;
+            gameState.status = 'ended';
+            const endingType = type === 'he' ? 'Happy Ending' : 'Bad Ending';
+            const historyForPrompt = JSON.stringify(gameState.eventHistory);
+
+            const prompt = `故事已经到达了终点。这是一个'${endingType}'。Lulu的最终好感度是 ${gameState.affection}。请你现在化身为一位出色的言情小说家，基于我们共同经历的整个故事（事件历史: ${historyForPrompt}），用一个长长的、富有文采和情感深度的段落，来详细描绘“我”和Lulu在故事结束后的未来。如果这是 Happy Ending，请描述我们如何从暧昧走向恋爱，甚至步入婚姻的殿堂，描绘一些甜蜜的未来生活片段。如果这是 Bad Ending，请描述我们如何渐行渐远，最终形同陌路，留下无尽的遗憾和对往昔的追忆。你的描述需要至少200字，并且情感真挚，能让玩家深刻感受到这个结局的氛围。请以JSON格式回应: {"endingTitle": "${endingType}", "endingDescription": "详细的结局描述..."}。请直接返回JSON对象，不要包含任何markdown标记。`;
+            
+            const response = await callGemini(getHistoryWithPrompt(prompt));
+            
+            if (response) {
+                endingTitle.textContent = response.endingTitle || endingType;
+                endingText.textContent = response.endingDescription || "故事走到了终点...";
+                endingScreen.classList.remove('hidden');
+                endingScreen.classList.add('fade-in');
+            } else {
+                endingTitle.textContent = endingType;
+                endingText.textContent = "故事的结局，需要你来想象...";
+                endingScreen.classList.remove('hidden');
+            }
+        }
+
+        function createChoiceButton(text, choiceType) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = 'choice-btn text-white text-lg font-serif py-4 px-8 rounded-sm w-full shadow-lg';
+            button.onclick = (e) => {
+                e.stopPropagation(); // Prevent clicking through to dialogue box
+                handleChoice(text, choiceType);
+            };
+            return button;
+        }
+
+        function addToHistory(event) {
+            gameState.eventHistory.push(event);
+        }
+
+        function getHistoryWithPrompt(finalPrompt) {
+            return [{ role: 'user', parts: [{ text: finalPrompt }] }];
+        }
+
+        function renderHistory() {
+            historyContent.innerHTML = '';
+            gameState.eventHistory.forEach(event => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'border-b border-slate-700 pb-4 last:border-0';
+                let speakerSpan, textP;
+
+                switch (event.type) {
+                    case 'narration':
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-400 italic font-serif';
+                        textP.textContent = event.content;
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'dialogue':
+                        speakerSpan = document.createElement('div');
+                        speakerSpan.className = 'font-bold text-pink-400 text-sm mb-1 tracking-wider uppercase';
+                        speakerSpan.textContent = event.speaker;
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-200';
+                        textP.textContent = event.content;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'choice':
+                        speakerSpan = document.createElement('div');
+                        speakerSpan.className = 'font-bold text-pink-400 text-sm mb-1 tracking-wider uppercase';
+                        speakerSpan.textContent = 'Lulu';
+                        textP = document.createElement('p');
+                        textP.className = 'text-gray-200';
+                        textP.textContent = event.luluResponse;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                    case 'playerChoice':
+                        speakerSpan = document.createElement('div');
+                        speakerSpan.className = 'font-bold text-blue-400 text-sm mb-1 tracking-wider uppercase text-right';
+                        speakerSpan.textContent = 'My Choice';
+                        textP = document.createElement('p');
+                        textP.className = 'text-blue-100 text-right italic';
+                        textP.textContent = `> ${event.content}`;
+                        entryDiv.appendChild(speakerSpan);
+                        entryDiv.appendChild(textP);
+                        break;
+                }
+                if (entryDiv.hasChildNodes()) {
+                    historyContent.appendChild(entryDiv);
+                }
+            });
+        }
+
+        function toggleHistoryModal() {
+            if (historyModal.classList.contains('hidden')) {
+                renderHistory();
+                historyModal.classList.remove('hidden');
+            } else {
+                historyModal.classList.add('hidden');
+            }
+        }
+        
+        function initGame() {
+            if (gameState.status !== 'not_started') return;
+            gameState.status = 'playing';
+
+            updateStatsUI();
+            speakBtn.disabled = true;
+            generateNextChapter(null, null);
+        }
+
+        // --- Global Event Listeners ---
+        
+        startScreen.addEventListener('click', () => {
+            startScreen.style.opacity = '0';
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                gameContainer.classList.remove('hidden');
+                initGame();
+            }, 1000);
+        });
+
+        historyBtn.addEventListener('click', toggleHistoryModal);
+        closeHistoryBtn.addEventListener('click', toggleHistoryModal);
+        historyModal.addEventListener('click', (event) => {
+            if (event.target === historyModal) {
+                toggleHistoryModal();
+            }
+        });
+
+    </script>
+</body>
+</html>
