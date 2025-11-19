@@ -2,977 +2,371 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>霓虹突袭 - 战争经济版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LongWeiHan's Game Lab</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
+        /* 全局设置 */
+        :root {
+            --primary-glow: rgba(124, 58, 237, 0.5);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+        }
+
         body {
             margin: 0;
-            overflow: hidden;
+            padding: 0;
             background-color: #050505;
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            user-select: none;
+            color: #ffffff;
+            font-family: 'Noto Sans SC', sans-serif;
+            overflow-x: hidden;
         }
-        canvas { display: block; }
-        
-        /* 霓虹特效类 */
-        .neon-text { text-shadow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5); }
-        .neon-text-purple { text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(168, 85, 247, 0.5); }
-        .neon-text-orange { text-shadow: 0 0 10px rgba(249, 115, 22, 0.7), 0 0 20px rgba(249, 115, 22, 0.5); }
-        .neon-text-green { text-shadow: 0 0 10px rgba(34, 197, 94, 0.7), 0 0 20px rgba(34, 197, 94, 0.5); }
-        .neon-box { box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 10px rgba(6, 182, 212, 0.1); }
-        
-        #ui-layer { transition: opacity 0.3s ease; }
-        .hidden { opacity: 0; pointer-events: none; display: none !important; }
-        body { cursor: crosshair; }
-        
-        /* 核弹白屏特效 */
-        #flash-layer { pointer-events: none; mix-blend-mode: screen; }
 
-        /* 滚动条样式 */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        /* 动态背景 Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
 
-        /* 商店卡片 */
-        .shop-card {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(74, 222, 128, 0.3);
-            transition: all 0.2s;
-            cursor: pointer;
+        /* 标题字体 */
+        .font-tech {
+            font-family: 'Orbitron', sans-serif;
         }
-        .shop-card:hover {
-            background: rgba(74, 222, 128, 0.1);
-            border-color: rgba(74, 222, 128, 0.8);
-            transform: scale(1.02);
-            box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+
+        /* 玻璃拟态卡片 */
+        .game-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            perspective: 1000px;
+            overflow: hidden;
         }
-        .shop-card.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            filter: grayscale(1);
+
+        .game-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: 0.5s;
         }
-        
-        /* 帮助菜单武器卡片 */
-        .weapon-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.2s;
+
+        .game-card:hover::before {
+            left: 100%;
         }
-        .weapon-card:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(0, 255, 255, 0.3);
-            transform: translateY(-2px);
+
+        .game-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 0 20px var(--primary-glow);
+            border-color: rgba(255, 255, 255, 0.3);
         }
+
+        /* 霓虹文字效果 */
+        .neon-text {
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.8),
+                         0 0 10px rgba(255, 255, 255, 0.5),
+                         0 0 20px rgba(124, 58, 237, 0.5);
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 入场动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.8s ease-out forwards;
+            opacity: 0;
+        }
+
+        .delay-1 { animation-delay: 0.2s; }
+        .delay-2 { animation-delay: 0.4s; }
+        .delay-3 { animation-delay: 0.6s; }
+
     </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col">
 
-    <!-- 核弹闪光层 -->
-    <div id="flash-layer" class="absolute inset-0 bg-white opacity-0 z-50 transition-opacity duration-1000"></div>
+    <!-- 背景动画画布 -->
+    <canvas id="bg-canvas"></canvas>
 
-    <!-- 游戏 UI 层 -->
-    <div id="ui-layer" class="absolute inset-0 z-10 pointer-events-none">
+    <!-- 导航/头部 -->
+    <header class="w-full py-8 px-6 flex justify-between items-center relative z-10 animate-in">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-gamepad text-3xl text-purple-400 neon-text"></i>
+            <h1 class="text-2xl md:text-3xl font-bold font-tech tracking-wider text-white">
+                LONGWEIHAN <span class="text-purple-500">GAMES</span>
+            </h1>
+        </div>
+        <div class="hidden md:flex gap-6 text-sm font-tech tracking-widest text-gray-400">
+            <span>DESIGN</span>
+            <span>CODE</span>
+            <span>ART</span>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-12 relative z-10">
         
-        <!-- 顶部 HUD -->
-        <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-start">
-            <!-- 左侧：分数与资源 -->
-            <div class="flex flex-col gap-2">
-                <div>
-                    <span class="text-xs text-gray-400 tracking-widest uppercase">SCORE</span>
-                    <div id="scoreEl" class="text-3xl font-bold text-cyan-400 neon-text">0</div>
-                </div>
-                <div class="flex gap-6 mt-2">
-                    <div>
-                        <span class="text-xs text-gray-400 tracking-widest uppercase">CREDITS</span>
-                        <div class="flex items-center text-green-400 neon-text-green">
-                            <span class="text-xl mr-1">$</span>
-                            <span class="text-2xl font-bold" id="creditsEl">0</span>
-                            <span class="text-[10px] ml-2 border border-green-500/50 px-1 rounded text-green-300 bg-green-900/30">按 B 购物</span>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="text-xs text-gray-400 tracking-widest uppercase">NANO-MATS</span>
-                        <div class="flex items-center text-orange-400 neon-text-orange">
-                            <span class="text-xl mr-1">⚙</span>
-                            <span class="text-2xl font-bold" id="materialEl">0</span>
-                            <span class="text-[10px] ml-2 border border-orange-500/50 px-1 rounded text-orange-300 bg-orange-900/30">右键建造</span>
-                        </div>
-                    </div>
-                </div>
+        <!-- 介绍语 -->
+        <div class="text-center mb-16 animate-in delay-1">
+            <h2 class="text-4xl md:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 font-tech">
+                VIRTUAL REALITY
+            </h2>
+            <p class="text-gray-400 max-w-2xl mx-auto text-lg font-light">
+                探索我的数字游乐场。这里汇集了创意、逻辑与艺术的结晶。
+                <br>点击下方卡片，开始您的旅程。
+            </p>
+        </div>
+
+        <!-- 游戏列表容器 -->
+        <div id="game-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in delay-2">
+            <!-- 游戏卡片将由 JS 动态生成 -->
+        </div>
+
+        <!-- 更多即将到来 -->
+        <div class="mt-20 text-center animate-in delay-3">
+            <div class="inline-block p-4 border border-dashed border-gray-700 rounded-lg text-gray-500 hover:text-gray-300 hover:border-gray-500 transition-colors cursor-default">
+                <i class="fa-solid fa-plus mr-2"></i> 更多作品开发中...
             </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="w-full py-6 text-center text-gray-600 text-sm relative z-10 border-t border-gray-900/50 backdrop-blur-sm">
+        <p>&copy; 2024 LongWeiHan. All Rights Reserved. Designed with <i class="fa-solid fa-heart text-red-900"></i></p>
+    </footer>
+
+    <script>
+        // ================= 配置区域 =================
+        // 在这里添加新的游戏，页面会自动更新
+        const games = [
+            {
+                id: '01',
+                title: "游戏项目壹",
+                subtitle: "GAME PROJECT ONE",
+                description: "探索未知的数字领域，体验独特的玩法机制。",
+                url: "https://longweihan.github.io/game/1",
+                icon: "fa-rocket", // FontAwesome 图标名
+                color: "from-blue-600 to-cyan-400", // 渐变色
+                tags: ["Action", "WebGL"]
+            },
+            {
+                id: '02',
+                title: "游戏项目贰",
+                subtitle: "GAME PROJECT TWO",
+                description: "沉浸式的艺术体验，挑战您的反应速度。",
+                url: "https://longweihan.github.io/game/2",
+                icon: "fa-cube",
+                color: "from-purple-600 to-pink-500",
+                tags: ["Puzzle", "Indie"]
+            },
+            // 示例：如何添加第三个游戏
+            /*
+            {
+                id: '03',
+                title: "星际穿越",
+                subtitle: "INTERSTELLAR",
+                description: "在群星之间穿梭，寻找失落的文明。",
+                url: "https://longweihan.github.io/game/3",
+                icon: "fa-user-astronaut",
+                color: "from-orange-500 to-red-500",
+                tags: ["Adventure"]
+            }
+            */
+        ];
+
+        // ================= 游戏卡片渲染逻辑 =================
+        const grid = document.getElementById('game-grid');
+
+        games.forEach(game => {
+            const card = document.createElement('a');
+            card.href = game.url;
+            card.className = 'game-card block rounded-2xl p-6 relative group no-underline';
             
-            <!-- 中间：武器状态 -->
-            <div class="absolute left-1/2 -translate-x-1/2 top-6 flex flex-col items-center">
-                <div class="text-xs text-gray-400 tracking-widest uppercase mb-1">WEAPON SYSTEM</div>
-                <div class="flex items-center space-x-4 bg-gray-900/90 backdrop-blur px-8 py-3 rounded-full border border-gray-700 neon-box transform scale-110">
-                    <span id="weaponName" class="text-xl font-bold text-yellow-400">PISTOL</span>
-                    <div class="h-8 w-px bg-gray-600"></div>
-                    <span id="ammoEl" class="text-2xl font-mono text-white">∞</span>
+            // 构建标签HTML
+            const tagsHtml = game.tags.map(tag => 
+                `<span class="text-xs font-mono px-2 py-1 rounded bg-white/10 text-gray-300 border border-white/5">${tag}</span>`
+            ).join('');
+
+            card.innerHTML = `
+                <div class="absolute top-0 right-0 p-4 opacity-20 font-tech text-4xl font-bold text-white group-hover:opacity-10 transition-opacity">
+                    ${game.id}
                 </div>
-                <!-- 炮台状态 -->
-                <div id="turretStatus" class="mt-2 text-xs text-gray-500 opacity-0 transition-opacity">
-                    [E] 部署炮台 (<span id="turretCount">0</span>)
-                </div>
-            </div>
-
-            <!-- 右侧：生命值 -->
-            <div class="flex flex-col items-end">
-                 <span class="text-xs text-gray-400 tracking-widest uppercase">INTEGRITY</span>
-                 <div class="w-56 h-5 bg-gray-800 rounded-full overflow-hidden border border-gray-700 mt-2 relative shadow-lg">
-                     <div id="healthBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 w-full transition-all duration-200"></div>
-                     <!-- 护盾层 -->
-                     <div id="shieldBar" class="absolute top-0 left-0 h-full bg-blue-400/50 w-0 transition-all duration-200"></div>
-                 </div>
-                 <div id="healthText" class="mt-1 text-xs font-mono text-cyan-300">100%</div>
-            </div>
-        </div>
-
-        <!-- 拾取提示 -->
-        <div id="pickupMsg" class="absolute top-40 w-full text-center transition-opacity duration-500 opacity-0">
-            <div class="inline-block bg-black/70 text-white px-6 py-3 rounded-lg border border-white/20 backdrop-blur transform scale-110">
-                <span id="pickupIcon" class="text-2xl mr-2">🎁</span>
-                获得 <span id="pickupName" class="font-bold text-yellow-400">物品</span>
-            </div>
-        </div>
-
-        <!-- 商店菜单 (覆盖层) -->
-        <div id="shopMenu" class="absolute inset-0 bg-black/80 backdrop-blur-sm z-[55] pointer-events-auto flex flex-col items-center justify-center hidden">
-            <div class="w-full max-w-5xl bg-gray-900 border border-green-500/30 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(34,197,94,0.1)]">
-                <!-- Header -->
-                <div class="p-6 border-b border-green-900/50 flex justify-between items-center bg-black/40">
-                    <div class="flex items-center gap-4">
-                        <h2 class="text-3xl font-black text-green-400 tracking-widest italic">BLACK MARKET</h2>
-                        <div class="px-3 py-1 bg-green-900/30 rounded border border-green-500/30 text-green-300 text-sm">
-                            当前信用点: $<span id="shopCredits">0</span>
+                <div class="h-full flex flex-col justify-between relative z-10">
+                    <div>
+                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br ${game.color} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <i class="fa-solid ${game.icon} text-2xl text-white"></i>
                         </div>
+                        <h3 class="text-2xl font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">${game.title}</h3>
+                        <p class="text-xs font-tech text-gray-500 tracking-widest mb-4">${game.subtitle}</p>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-6 font-light">
+                            ${game.description}
+                        </p>
                     </div>
-                    <div class="text-gray-400 text-sm">按 [B] 或 [ESC] 关闭</div>
-                </div>
-                
-                <!-- Items Grid -->
-                <div class="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- 商品 -->
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('repair')">
-                        <div class="text-4xl mb-3">✚</div>
-                        <h3 class="text-xl font-bold text-white">紧急修复协议</h3>
-                        <p class="text-sm text-gray-400 mb-4">立即修复受损机体，恢复 50 点生命值。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$100</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
+                    <div class="flex justify-between items-end border-t border-white/10 pt-4 mt-2">
+                        <div class="flex gap-2">
+                            ${tagsHtml}
                         </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('ammo')">
-                        <div class="text-4xl mb-3">⑊</div>
-                        <h3 class="text-xl font-bold text-white">弹药补给箱</h3>
-                        <p class="text-sm text-gray-400 mb-4">填满当前武器的所有弹药 (无限武器除外)。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$50</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('shield')">
-                        <div class="text-4xl mb-3">🛡</div>
-                        <h3 class="text-xl font-bold text-white">粒子护盾电池</h3>
-                        <p class="text-sm text-gray-400 mb-4">为护盾发生器充能 +50% (可超载)。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$150</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('turret')">
-                        <div class="text-4xl mb-3 text-yellow-400">♜</div>
-                        <h3 class="text-xl font-bold text-white">哨戒炮台</h3>
-                        <p class="text-sm text-gray-400 mb-4">增加 1 个自动炮台库存。建立防线的关键。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$200</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('material')">
-                        <div class="text-4xl mb-3 text-orange-400">⚙</div>
-                        <h3 class="text-xl font-bold text-white">纳米材料包</h3>
-                        <p class="text-sm text-gray-400 mb-4">购买 50 单位的建筑材料用于建造掩体。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$75</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group border-red-500/30 hover:border-red-500" onclick="buyItem('nuke')">
-                        <div class="text-4xl mb-3 text-red-500">☢</div>
-                        <h3 class="text-xl font-bold text-red-100">战术核弹发射器</h3>
-                        <p class="text-sm text-gray-400 mb-4">购买后立即引爆，清除全屏敌人。慎用。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-red-400 font-mono font-bold text-xl">$1000</span>
-                            <button class="px-4 py-1 bg-red-900 hover:bg-red-700 text-white rounded text-sm font-bold border border-red-500">授权</button>
+                        <div class="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-white group-hover:text-black transition-all">
+                            <i class="fa-solid fa-arrow-right -rotate-45 group-hover:rotate-0 transition-transform duration-300"></i>
                         </div>
                     </div>
                 </div>
-                
-                <div class="p-4 bg-black/60 text-center text-xs text-gray-500">
-                    战术提示: 即使在商店界面，背景世界依然处于静止状态 (Time Frozen)。
-                </div>
-            </div>
-        </div>
-
-        <!-- 主菜单 -->
-        <div id="startMenu" class="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md pointer-events-auto z-50">
-            <div class="p-10 rounded-2xl border border-cyan-500/30 shadow-[0_0_60px_rgba(6,182,212,0.15)] text-center max-w-lg w-full relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500 animate-pulse"></div>
-
-                <h1 class="text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-purple-500 neon-text italic tracking-tighter">NEON RAID</h1>
-                <h2 class="text-2xl text-purple-400 font-bold mb-8 tracking-[0.5em] uppercase text-shadow">Tactical</h2>
-                
-                <!-- Game Over Section -->
-                <div id="finalScoreContainer" class="hidden mb-8 p-6 bg-red-950/40 border border-red-500/50 rounded-lg">
-                    <p class="text-gray-400 text-xs uppercase tracking-widest mb-2">Mission Terminated</p>
-                    <p id="finalScore" class="text-6xl font-bold text-red-500 neon-text-orange">0</p>
-                </div>
-
-                <div class="space-y-4">
-                    <button id="startBtn" class="w-full py-5 bg-gradient-to-r from-cyan-700 to-purple-700 hover:from-cyan-600 hover:to-purple-600 text-white font-bold rounded-lg text-2xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:scale-[1.02] uppercase tracking-widest group relative overflow-hidden">
-                        <span class="relative z-10" id="startBtnText">INITIATE</span>
-                        <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                    </button>
-
-                    <!-- New Button: Return to Title -->
-                    <button id="returnToTitleBtn" class="hidden w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-lg transition-all border border-gray-600 uppercase tracking-widest">
-                        返回主界面 (Main Menu)
-                    </button>
-                    
-                    <button id="helpBtn" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-cyan-400 font-bold rounded-lg text-lg transition-all border border-cyan-500/30 uppercase tracking-widest">
-                        战术手册 (Help)
-                    </button>
-                </div>
-                
-                <div class="mt-6 text-xs text-gray-500">
-                    v 1.3.0 | 系统就绪 | 等待指令
-                </div>
-            </div>
-        </div>
-
-        <!-- 帮助菜单 (覆盖层) -->
-        <div id="helpMenu" class="absolute inset-0 bg-black/95 backdrop-blur-xl z-[60] pointer-events-auto flex flex-col items-center justify-center hidden">
-            <div class="w-full max-w-4xl h-[85vh] flex flex-col bg-gray-900/50 border border-cyan-500/30 rounded-2xl overflow-hidden shadow-2xl">
-                <!-- Header -->
-                <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-black/40">
-                    <h2 class="text-3xl font-bold text-cyan-400 tracking-widest">战术手册 TACTICAL MANUAL</h2>
-                    <button id="closeHelpBtn" class="text-gray-400 hover:text-white text-4xl font-light focus:outline-none">&times;</button>
-                </div>
-                
-                <!-- Content -->
-                <div class="flex-1 overflow-y-auto p-8 space-y-8">
-                    
-                    <!-- 1. Controls -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-cyan-500 pl-3">操作指南 / CONTROLS</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">WASD</div>
-                                <div class="text-gray-400">战术移动</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">MOUSE</div>
-                                <div class="text-gray-400">瞄准与射击 (左键)</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">右键 (Right Click)</div>
-                                <div class="text-gray-400">消耗10材料建造掩体</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">E 键 / B 键</div>
-                                <div class="text-gray-400">放置炮台 / 打开商店</div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 2. Weapons -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-yellow-500 pl-3">武器库 / ARSENAL</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-yellow-400">手枪</span> <span class="text-xs text-gray-500">无限</span></div>
-                                <p class="text-xs text-gray-400">基础武器，精准度高，无后坐力。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-purple-400">突击步枪</span> <span class="text-xs text-gray-500">普通</span></div>
-                                <p class="text-xs text-gray-400">全自动射击，适合中距离压制。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-red-500">防空霰弹炮</span> <span class="text-xs text-gray-500">近战</span></div>
-                                <p class="text-xs text-gray-400">一次发射多枚弹片，近距离爆发极高，后坐力大。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-green-400">加特林机枪</span> <span class="text-xs text-gray-500">火力</span></div>
-                                <p class="text-xs text-gray-400">射速极快，载弹量大，但开火时会降低移动速度。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-pink-400">弹射光盘</span> <span class="text-xs text-gray-500">战术</span></div>
-                                <p class="text-xs text-gray-400">发射在墙壁间反弹的高能光盘，清理死角敌人。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-orange-500">RPG 火箭筒</span> <span class="text-xs text-gray-500">爆炸</span></div>
-                                <p class="text-xs text-gray-400">造成大范围爆炸伤害，能有效清除密集的敌人。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-cyan-400">磁轨炮 (Laser)</span> <span class="text-xs text-gray-500">穿透</span></div>
-                                <p class="text-xs text-gray-400">瞬间穿透直线上所有敌人，伤害极高。</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 3. Items -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-blue-500 pl-3">战术道具 / SUPPORT</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1 text-green-400">$</div>
-                                <div class="text-xs font-bold text-green-400">信用点</div>
-                                <div class="text-[10px] text-gray-500">击杀敌人获取，用于购物</div>
-                            </div>
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1">✚</div>
-                                <div class="text-xs font-bold text-green-400">医疗包</div>
-                                <div class="text-[10px] text-gray-500">+30 HP</div>
-                            </div>
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1">🛡</div>
-                                <div class="text-xs font-bold text-blue-400">能量盾</div>
-                                <div class="text-[10px] text-gray-500">额外护盾</div>
-                            </div>
-                             <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1 text-yellow-400">♜</div>
-                                <div class="text-xs font-bold text-yellow-400">自动炮台</div>
-                                <div class="text-[10px] text-gray-500">按 E 部署 (掉落率提升)</div>
-                            </div>
-                            <div class="p-3 bg-red-900/20 rounded border border-red-500/50">
-                                <div class="text-2xl mb-1 text-red-500">☢</div>
-                                <div class="text-xs font-bold text-red-500">战术核弹</div>
-                                <div class="text-[10px] text-gray-500">全屏清除</div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
-
-<script>
-// ---------------- 音乐与音效系统 ----------------
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const BGM = {
-    isPlaying: false, tempo: 130, nextNoteTime: 0, beatCount: 0, bassNotes: [36, 36, 38, 36, 43, 43, 41, 41], timerID: null,
-    start: function() { if(this.isPlaying)return; if(audioCtx.state==='suspended')audioCtx.resume(); this.isPlaying=true; this.nextNoteTime=audioCtx.currentTime; this.beatCount=0; this.scheduler(); },
-    stop: function() { this.isPlaying=false; clearTimeout(this.timerID); },
-    scheduler: function() { while(this.nextNoteTime<audioCtx.currentTime+0.1){ this.playBeat(this.nextNoteTime, this.beatCount); this.scheduleNextBeat(); } if(this.isPlaying)this.timerID=setTimeout(()=>this.scheduler(),25); },
-    scheduleNextBeat: function() { this.nextNoteTime+=60.0/this.tempo*0.25; this.beatCount++; },
-    playBeat: function(time, beat) { if(beat%4===0)this.playKick(time); if(beat%4===2)this.playHat(time); if(beat%16===4||beat%16===12)this.playSnare(time); if(beat%2===0){const idx=Math.floor(beat/16)%this.bassNotes.length;this.playBass(time,440*Math.pow(2,(this.bassNotes[idx]-69)/12));} },
-    playKick: (t)=>{const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(0.01,t+0.5);g.gain.setValueAtTime(1,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.5);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.5);},
-    playSnare: (t)=>{const b=audioCtx.createBuffer(1,audioCtx.sampleRate*0.2,audioCtx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<b.length;i++)d[i]=Math.random()*2-1;const s=audioCtx.createBufferSource();s.buffer=b;const g=audioCtx.createGain();const f=audioCtx.createBiquadFilter();f.type='highpass';f.frequency.value=1000;g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.2);s.connect(f);f.connect(g);g.connect(audioCtx.destination);s.start(t);},
-    playHat: (t)=>{const o=audioCtx.createOscillator();o.type='square';o.frequency.value=4000;const g=audioCtx.createGain();const f=audioCtx.createBiquadFilter();f.type='bandpass';f.frequency.value=10000;g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.05);o.connect(f);f.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.05);},
-    playBass: (t,f)=>{const o=audioCtx.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(f,t);const g=audioCtx.createGain();const fl=audioCtx.createBiquadFilter();fl.type='lowpass';fl.frequency.setValueAtTime(800,t);fl.frequency.exponentialRampToValueAtTime(200,t+0.2);g.gain.setValueAtTime(0.3,t);g.gain.linearRampToValueAtTime(0,t+0.2);o.connect(fl);fl.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.2);}
-};
-
-const SFX = {
-    play: (freq, type, dur, vol=0.1) => { const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type; o.frequency.setValueAtTime(freq,audioCtx.currentTime); g.gain.setValueAtTime(vol,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+dur); },
-    shoot: (type) => {
-        if(type==='pistol') SFX.play(600,'triangle',0.1,0.1);
-        if(type==='shotgun') { SFX.play(150,'sawtooth',0.3,0.2); SFX.play(100,'square',0.2,0.2); }
-        if(type==='rifle') SFX.play(500,'square',0.08,0.08);
-        if(type==='minigun') SFX.play(400,'sawtooth',0.05,0.1);
-        if(type==='rocket') { SFX.play(200,'sawtooth',0.5,0.2); SFX.play(50,'square',1.0,0.5); }
-        if(type==='bouncer') SFX.play(800,'sine',0.1,0.2);
-        if(type==='laser') { const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.frequency.setValueAtTime(2000,audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(100,audioCtx.currentTime+0.3); g.gain.setValueAtTime(0.2,audioCtx.currentTime); g.gain.linearRampToValueAtTime(0,audioCtx.currentTime+0.3); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.3); }
-    },
-    nuke: () => { const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'lowpass'; o.frequency.value = 50; SFX.play(50, 'sawtooth', 3.0, 0.8); SFX.play(100, 'square', 1.0, 0.5); },
-    build: () => SFX.play(1200,'sine',0.1,0.3),
-    error: () => SFX.play(150,'sawtooth',0.2,0.2),
-    buy: () => SFX.play(1000,'square',0.1,0.2),
-    explode: () => { const b=audioCtx.createBuffer(1,audioCtx.sampleRate*0.5,audioCtx.sampleRate); const d=b.getChannelData(0); for(let i=0;i<b.length;i++)d[i]=Math.random()*2-1; const s=audioCtx.createBufferSource(); s.buffer=b; const g=audioCtx.createGain(); g.gain.setValueAtTime(0.5,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.5); s.connect(g); g.connect(audioCtx.destination); s.start(); }
-};
-
-const canvas = document.querySelector('#gameCanvas');
-const ctx = canvas.getContext('2d');
-const WORLD_W = 2500, WORLD_H = 2500, TILE = 50;
-
-let gameRunning = false;
-let isShopOpen = false;
-let score = 0;
-let frame = 0;
-let animationId;
-let camera = { x: 0, y: 0 };
-
-let player, projectiles, enemies, particles, walls, pickups, turrets;
-
-const WEAPONS = {
-    pistol: { name: 'PISTOL', color: '#facc15', cd: 20, speed: 14, dmg: 1, spread: 0.05, count: 1, ammo: Infinity },
-    rifle: { name: 'ASSAULT RIFLE', color: '#a855f7', cd: 6, speed: 20, dmg: 0.8, spread: 0.15, count: 1, ammo: 120 },
-    shotgun: { name: 'FLAK CANNON', color: '#ef4444', cd: 45, speed: 12, dmg: 1.2, spread: 0.5, count: 6, ammo: 20 },
-    minigun: { name: 'MINIGUN', color: '#10b981', cd: 3, speed: 18, dmg: 0.5, spread: 0.25, count: 1, ammo: 300 },
-    bouncer: { name: 'RICOCHET', color: '#ec4899', cd: 15, speed: 11, dmg: 2.5, spread: 0.05, count: 1, ammo: 25, type: 'bounce' },
-    rocket: { name: 'RPG LAUNCHER', color: '#f97316', cd: 60, speed: 10, dmg: 10, spread: 0.05, count: 1, ammo: 10, explosive: true, radius: 120 },
-    laser: { name: 'RAILGUN', color: '#22d3ee', cd: 70, speed: 0, dmg: 5, spread: 0, count: 1, ammo: 15, type: 'rail' }
-};
-
-const INPUT = { x: 0, y: 0, down: false, rightDown: false };
-const KEYS = {};
-
-class Player {
-    constructor(x, y) {
-        this.x = x; this.y = y; this.radius = 16; this.color = '#06b6d4';
-        this.baseSpeed = 5.5; this.speed = 5.5; this.maxHealth = 100; this.health = 100;
-        this.shield = 0; this.materials = 50; this.credits = 0; this.turretCount = 0;
-        this.weapon = 'pistol'; this.ammo = Infinity; this.cd = 0; this.angle = 0;
-    }
-
-    update() {
-        if (this.weapon === 'minigun' && INPUT.down && this.ammo > 0) this.speed = this.baseSpeed * 0.5;
-        else this.speed = this.baseSpeed;
-
-        let dx = 0, dy = 0;
-        if (KEYS['w']) dy -= 1; if (KEYS['s']) dy += 1; if (KEYS['a']) dx -= 1; if (KEYS['d']) dx += 1;
-
-        if (dx !== 0 || dy !== 0) {
-            const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-            const moveX = dx * this.speed; const moveY = dy * this.speed;
-            if (!this.checkCol(this.x + moveX, this.y)) this.x += moveX;
-            if (!this.checkCol(this.x, this.y + moveY)) this.y += moveY;
-        }
-
-        this.x = Math.max(this.radius, Math.min(WORLD_W - this.radius, this.x));
-        this.y = Math.max(this.radius, Math.min(WORLD_H - this.radius, this.y));
-        this.angle = Math.atan2((INPUT.y + camera.y) - this.y, (INPUT.x + camera.x) - this.x);
-
-        if (this.cd > 0) this.cd--;
-        if (frame % 120 === 0 && this.shield < 50) this.shield = Math.min(50, this.shield + 1);
-    }
-
-    checkCol(x, y) {
-        const r = { x: x - this.radius, y: y - this.radius, w: this.radius*2, h: this.radius*2 };
-        return walls.some(w => checkRectOverlap(r, w));
-    }
-
-    draw() {
-        ctx.save(); ctx.translate(this.x - camera.x, this.y - camera.y); ctx.rotate(this.angle);
-        ctx.fillStyle = WEAPONS[this.weapon].color;
-        if (this.weapon === 'minigun') { ctx.fillRect(0, -6, this.radius + 18, 12); ctx.fillStyle = '#000'; ctx.fillRect(this.radius + 18, -6, 4, 12); } 
-        else if (this.weapon === 'rocket') { ctx.fillRect(0, -8, this.radius + 16, 16); } 
-        else { ctx.fillRect(0, -4, this.radius + 14, 8); }
-        ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 15; ctx.fill();
-        if (this.shield > 0) { ctx.beginPath(); ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2); ctx.strokeStyle = `rgba(100, 200, 255, ${this.shield/50})`; ctx.lineWidth = 2; ctx.stroke(); }
-        ctx.restore();
-    }
-}
-
-class Turret {
-    constructor(x, y) { this.x = x; this.y = y; this.radius = 15; this.angle = 0; this.cd = 0; this.target = null; this.health = 50; }
-    update() {
-        let minDist = 400; this.target = null;
-        for(let e of enemies) { const d = Math.hypot(e.x - this.x, e.y - this.y); if (d < minDist) { minDist = d; this.target = e; } }
-        if (this.target) {
-            this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-            if (this.cd <= 0) { projectiles.push(new Projectile(this.x, this.y, 4, '#fbbf24', {x: Math.cos(this.angle)*15, y: Math.sin(this.angle)*15}, 0.5)); this.cd = 15; SFX.play(800, 'triangle', 0.05, 0.05); }
-        } else { this.angle += 0.05; }
-        if (this.cd > 0) this.cd--;
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (dx < -50 || dx > canvas.width+50 || dy < -50 || dy > canvas.height+50) return;
-        ctx.save(); ctx.translate(dx, dy); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0,0, 12, 0, Math.PI*2); ctx.fill();
-        ctx.rotate(this.angle); ctx.fillStyle = '#fbbf24'; ctx.fillRect(-5, -5, 20, 10); ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill(); ctx.restore();
-    }
-}
-
-class Projectile {
-    constructor(x, y, r, c, vel, dmg, type='normal', meta={}) {
-        this.x = x; this.y = y; this.r = r; this.color = c; this.vel = vel; this.dmg = dmg; this.type = type; this.meta = meta; this.life = 100; this.markedForDelete = false; this.bounces = 2;
-    }
-    update() {
-        const prevX = this.x; const prevY = this.y;
-        this.x += this.vel.x; this.y += this.vel.y; this.life--;
-        for (let w of walls) {
-            if (this.x > w.x && this.x < w.x + w.w && this.y > w.y && this.y < w.y + w.h) {
-                if (this.type === 'bounce' && this.bounces > 0) {
-                    this.bounces--; this.x = prevX; this.y = prevY;
-                    if (this.x + this.vel.x > w.x && this.x + this.vel.x < w.x + w.w) this.vel.y = -this.vel.y; else this.vel.x = -this.vel.x;
-                    createParticles(this.x, this.y, this.color, 2, 1); return;
-                }
-                this.explode(); if (w.destructible) w.health -= this.dmg * 5; break;
-            }
-        }
-        if (this.life <= 0) this.markedForDelete = true;
-    }
-    explode() {
-        this.markedForDelete = true;
-        if (this.type === 'rocket') { SFX.explode(); createParticles(this.x, this.y, '#f97316', 20, 5); particles.push({x: this.x, y: this.y, life: 20, maxLife: 20, type: 'shockwave', r: this.meta.radius}); enemies.forEach(e => { if (Math.hypot(e.x - this.x, e.y - this.y) < this.meta.radius) e.takeDamage(this.dmg); }); } 
-        else { createParticles(this.x, this.y, this.color, 3, 2); }
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (this.type === 'rocket') { ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(dx, dy, 6, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx - this.vel.x*3, dy - this.vel.y*3); ctx.strokeStyle = 'rgba(255,100,0,0.5)'; ctx.lineWidth = 4; ctx.stroke(); } 
-        else if (this.type === 'bounce') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = 'rgba(236, 72, 153, 0.5)'; ctx.beginPath(); ctx.arc(dx, dy, 8, 0, Math.PI*2); ctx.stroke(); } 
-        else { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(dx, dy, this.r, 0, Math.PI*2); ctx.fill(); }
-    }
-}
-
-class Enemy {
-    constructor(x, y, type) {
-        this.x = x; this.y = y; this.type = type;
-        this.radius = type === 'tank' ? 26 : (type === 'speed' ? 12 : 18);
-        this.color = type === 'tank' ? '#a855f7' : (type === 'speed' ? '#fbbf24' : '#ef4444');
-        this.speed = type === 'tank' ? 1.2 : (type === 'speed' ? 4.2 : 2.2);
-        this.hp = type === 'tank' ? 25 : (type === 'speed' ? 2 : 5);
-        this.maxHp = this.hp; this.flash = 0;
-    }
-    takeDamage(amount) {
-        if (this.hp <= 0) return false;
-        this.hp -= amount; this.flash = 3;
-        if (this.hp <= 0) {
-            score += (this.type==='tank'?50:10); 
-            player.materials += (this.type==='tank'?15:5);
-            // --- 新增: 获取信用点 ---
-            player.credits += (this.type==='tank'?25:10);
-            updateUI();
-            createParticles(this.x, this.y, this.color, 10, 4);
-            let dropChance = 0.15; if (this.type === 'tank') dropChance = 0.5;
-            if(Math.random() < dropChance) spawnPickup(this.x, this.y);
-            return true;
-        }
-        return false;
-    }
-    update() {
-        const dx = player.x - this.x; const dy = player.y - this.y; const d = Math.hypot(dx, dy);
-        let vx = (dx / d) * this.speed; let vy = (dy / d) * this.speed;
-        enemies.forEach(e => { if (e === this) return; const edx = this.x - e.x; const edy = this.y - e.y; const dist = Math.hypot(edx, edy); if (dist < this.radius * 2) { const push = (this.radius*2 - dist) / dist; vx += edx * push * 0.1; vy += edy * push * 0.1; } });
-        turrets.forEach(t => { const tdx = t.x - this.x; const tdy = t.y - this.y; if (Math.hypot(tdx, tdy) < 30) { t.health -= 1; if(t.health <=0) { turrets = turrets.filter(tr => tr !== t); createParticles(t.x, t.y, '#333', 10, 5); SFX.explode(); } } });
-        if (!this.checkCol(this.x + vx, this.y)) this.x += vx;
-        if (!this.checkCol(this.x, this.y + vy)) this.y += vy;
-        if (this.flash > 0) this.flash--;
-    }
-    checkCol(x, y) {
-        const r = {x: x-this.radius, y: y-this.radius, w:this.radius*2, h:this.radius*2};
-        for(let w of walls) { if (checkRectOverlap(r, w)) { if (w.destructible) { w.health -= 0.1; if (w.health <= 0) { walls = walls.filter(wall => wall !== w); createParticles(w.x + w.w/2, w.y + w.h/2, '#fbbf24', 5, 3); } } return true; } }
-        return false;
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (dx < -50 || dx > canvas.width+50 || dy < -50 || dy > canvas.height+50) return;
-        ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.atan2(player.y - this.y, player.x - this.x));
-        ctx.fillStyle = this.flash > 0 ? 'white' : this.color; ctx.shadowBlur = 10; ctx.shadowColor = this.color;
-        if (this.type === 'tank') ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2);
-        else if (this.type === 'speed') { ctx.beginPath(); ctx.moveTo(this.radius,0); ctx.lineTo(-this.radius, -this.radius); ctx.lineTo(-this.radius, this.radius); ctx.fill(); }
-        else { ctx.beginPath(); ctx.arc(0,0,this.radius,0,Math.PI*2); ctx.fill(); }
-        ctx.restore();
-    }
-}
-
-function checkRectOverlap(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
-
-function createParticles(x, y, color, count, speed) {
-    for(let i=0; i<count; i++) { const angle = Math.random() * Math.PI * 2; const s = Math.random() * speed; particles.push({ x: x, y: y, vx: Math.cos(angle)*s, vy: Math.sin(angle)*s, life: 1.0, color: color, type: 'normal' }); }
-}
-
-function spawnPickup(x, y) {
-    if (x === undefined) x = Math.random() * (WORLD_W - 200) + 100;
-    if (y === undefined) y = Math.random() * (WORLD_H - 200) + 100;
-    const w = Math.random();
-    let type = 'ammo';
-    // --- 调整：自动炮台 (turret) 的生成率提高 ---
-    // 之前是 >0.85 (15% range), 现在调整为覆盖更广的范围，例如 0.8 到 0.9 (10%)
-    // 实际上之前的逻辑: nuke(2%), minigun(8%), turret(5%), bouncer(5%)...
-    // 新逻辑: 
-    if (w > 0.98) type = 'nuke';
-    else if (w > 0.90) type = 'minigun';
-    else if (w > 0.80) type = 'turret'; // 增加到 10% 几率 (0.80 - 0.90)
-    else if (w > 0.75) type = 'bouncer';
-    else if (w > 0.70) type = 'laser';
-    else if (w > 0.65) type = 'rocket';
-    else if (w > 0.55) type = 'shield';
-    else if (w > 0.45) type = 'health';
-    else if (w > 0.25) type = 'shotgun';
-    else if (w > 0.10) type = 'rifle';
-    
-    pickups.push({ x: x, y: y, type: type, bob: 0 });
-}
-
-function triggerNuke() {
-    SFX.nuke();
-    const flash = document.getElementById('flash-layer'); flash.style.opacity = 1; setTimeout(() => flash.style.opacity = 0, 1000);
-    enemies.forEach(e => { if (e.type !== 'tank') { e.hp = 0; createParticles(e.x, e.y, e.color, 10, 5); } else { e.takeDamage(50); } });
-    let kills = enemies.filter(e => e.hp <= 0).length; score += kills * 20; updateUI();
-    showMsg("TACTICAL NUKE DETONATED", "text-red-600");
-}
-
-function updateUI() {
-    document.getElementById('scoreEl').innerText = score;
-    document.getElementById('materialEl').innerText = Math.floor(player.materials);
-    document.getElementById('creditsEl').innerText = Math.floor(player.credits);
-    document.getElementById('shopCredits').innerText = Math.floor(player.credits);
-    
-    document.getElementById('healthBar').style.width = `${player.health}%`;
-    document.getElementById('shieldBar').style.width = `${player.shield}%`;
-    document.getElementById('healthText').innerText = Math.ceil(player.health) + "%";
-    const wData = WEAPONS[player.weapon];
-    document.getElementById('weaponName').innerText = wData.name;
-    document.getElementById('weaponName').style.color = wData.color;
-    document.getElementById('ammoEl').innerText = player.ammo === Infinity ? '∞' : player.ammo;
-    document.getElementById('turretCount').innerText = player.turretCount;
-    document.getElementById('turretStatus').style.opacity = player.turretCount > 0 ? 1 : 0;
-}
-
-function showMsg(text, colorClass) {
-    const el = document.getElementById('pickupName'); const msg = document.getElementById('pickupMsg');
-    el.innerText = text; el.className = `font-bold ${colorClass}`;
-    msg.style.opacity = 1; setTimeout(() => msg.style.opacity = 0, 1500);
-}
-
-function toggleShop() {
-    if (!gameRunning && document.getElementById('startMenu').classList.contains('hidden')) {
-        // 如果游戏没在运行且不在主菜单 (理论上不应发生，除非暂停逻辑复杂)
-        return;
-    }
-    if (!gameRunning && !isShopOpen) return; // 游戏结束或未开始不能开店
-
-    const shop = document.getElementById('shopMenu');
-    isShopOpen = !isShopOpen;
-    
-    if (isShopOpen) {
-        shop.classList.remove('hidden');
-        updateUI(); // 确保显示最新余额
-    } else {
-        shop.classList.add('hidden');
-    }
-}
-
-function buyItem(item) {
-    if (!player) return;
-    let cost = 0;
-    let success = false;
-
-    if (item === 'repair') {
-        cost = 100;
-        if (player.credits >= cost && player.health < 100) {
-            player.credits -= cost;
-            player.health = Math.min(100, player.health + 50);
-            success = true;
-            showMsg("机体已修复", "text-green-400");
-        }
-    } else if (item === 'ammo') {
-        cost = 50;
-        if (player.credits >= cost && player.weapon !== 'pistol') {
-            player.credits -= cost;
-            player.ammo = WEAPONS[player.weapon].ammo;
-            success = true;
-            showMsg("弹药已装填", "text-white");
-        }
-    } else if (item === 'shield') {
-        cost = 150;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.shield = Math.min(100, player.shield + 50);
-            success = true;
-            showMsg("护盾充能完毕", "text-blue-400");
-        }
-    } else if (item === 'turret') {
-        cost = 200;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.turretCount++;
-            success = true;
-            showMsg("炮台系统上线", "text-yellow-400");
-        }
-    } else if (item === 'material') {
-        cost = 75;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.materials += 50;
-            success = true;
-            showMsg("纳米材料获取", "text-orange-400");
-        }
-    } else if (item === 'nuke') {
-        cost = 1000;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            triggerNuke();
-            success = true;
-            toggleShop(); // 购买核弹后自动关闭商店观看效果
-        }
-    }
-
-    if (success) {
-        SFX.buy();
-        updateUI();
-    } else {
-        SFX.error();
-    }
-}
-
-function initGame() {
-    score = 0; walls = [];
-    walls.push({x:-50, y:-50, w:WORLD_W+100, h:50, destructible:false});
-    walls.push({x:-50, y:WORLD_H, w:WORLD_W+100, h:50, destructible:false});
-    walls.push({x:-50, y:0, w:50, h:WORLD_H, destructible:false});
-    walls.push({x:WORLD_W, y:0, w:50, h:WORLD_H, destructible:false});
-    for(let i=0; i<25; i++) {
-        const w = Math.random()*200 + 50; const h = Math.random()*200 + 50;
-        const x = Math.random()*(WORLD_W-w-200) + 100; const y = Math.random()*(WORLD_H-h-200) + 100;
-        if(Math.hypot(x-WORLD_W/2, y-WORLD_H/2) > 300) { walls.push({x, y, w, h, destructible:false, color: 'rgba(6, 182, 212, 0.1)'}); }
-    }
-    player = new Player(WORLD_W/2, WORLD_H/2);
-    enemies = []; projectiles = []; particles = []; pickups = []; turrets = [];
-    for(let i=0; i<10; i++) spawnPickup();
-    camera.x = player.x - canvas.width/2; camera.y = player.y - canvas.height/2;
-    updateUI();
-}
-
-function spawnEnemy() {
-    let attempts = 0; let safe = false; let x, y, dist, ang;
-    while (!safe && attempts < 20) {
-        attempts++; ang = Math.random()*Math.PI*2; dist = canvas.width/2 + 100 + Math.random() * 200;
-        x = Math.max(50, Math.min(WORLD_W-50, player.x + Math.cos(ang)*dist));
-        y = Math.max(50, Math.min(WORLD_H-50, player.y + Math.sin(ang)*dist));
-        const testRect = { x: x-20, y: y-20, w: 40, h: 40 };
-        let collision = false;
-        for (let w of walls) { if (checkRectOverlap(testRect, w)) { collision = true; break; } }
-        if (Math.hypot(player.x - x, player.y - y) < 400) collision = true;
-        if (!collision) safe = true;
-    }
-    if (safe) {
-        let type = 'normal';
-        if (score > 500 && Math.random() < 0.25) type = 'tank';
-        else if (score > 200 && Math.random() < 0.35) type = 'speed';
-        enemies.push(new Enemy(x, y, type));
-    }
-}
-
-function animate() {
-    // 如果商店打开，暂停游戏逻辑，但保持渲染（如果需要冻结画面）或者完全停止
-    // 这里我们选择完全停止更新循环，只渲染静态画面或者直接停止
-    // 为了简单，如果 shop open，直接 return，但这会导致画面冻结。
-    // 更好的做法是：如果不 running，不执行 update，只执行 draw？
-    // 鉴于结构，简单的做法是：如果 shopOpen，不调用 requestAnimationFrame，或者在开头 return。
-    // 但为了让背景看起来还在（冻结），我们可以在 toggleShop 里处理。
-    // 这里采用：只在 !isShopOpen 时 update 和 requestNextFrame
-    
-    if (!gameRunning) return;
-
-    if (isShopOpen) {
-        // 商店打开时，暂停游戏循环，但保持 requestAnimationFrame 以便随时恢复？
-        // 或者直接不请求下一帧。当关闭商店时再启动 animate()。
-        // 我们采用后者，在 toggleShop 里重启。
-        return; 
-    }
-
-    animationId = requestAnimationFrame(animate); frame++;
-    camera.x += (player.x - canvas.width/2 - camera.x) * 0.1; camera.y += (player.y - canvas.height/2 - camera.y) * 0.1;
-    ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    const startX = Math.floor(camera.x/TILE)*TILE; const startY = Math.floor(camera.y/TILE)*TILE;
-    ctx.strokeStyle = 'rgba(20, 20, 30, 0.5)'; ctx.lineWidth = 1; ctx.beginPath();
-    for(let x=startX; x<camera.x+canvas.width; x+=TILE) { ctx.moveTo(x-camera.x, 0); ctx.lineTo(x-camera.x, canvas.height); }
-    for(let y=startY; y<camera.y+canvas.height; y+=TILE) { ctx.moveTo(0, y-camera.y); ctx.lineTo(canvas.width, y-camera.y); }
-    ctx.stroke();
-
-    walls.forEach(w => {
-        const dx = w.x - camera.x; const dy = w.y - camera.y;
-        if(dx+w.w < 0 || dx > canvas.width || dy+w.h < 0 || dy > canvas.height) return;
-        ctx.save(); ctx.translate(dx, dy);
-        if(w.destructible) {
-            ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 10;
-            ctx.strokeRect(0,0,w.w,w.h); ctx.fillStyle = `rgba(251, 191, 36, ${w.health/w.maxHealth * 0.3})`; ctx.fillRect(0,0,w.w,w.h);
-            ctx.fillStyle = 'red'; ctx.fillRect(5, -10, w.w-10, 4); ctx.fillStyle = '#0f0'; ctx.fillRect(5, -10, (w.w-10)*(w.health/w.maxHealth), 4);
-        } else {
-            ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2; ctx.shadowColor = '#06b6d4'; ctx.shadowBlur = 10;
-            ctx.fillStyle = w.color || 'rgba(6,182,212,0.1)'; ctx.strokeRect(0,0,w.w,w.h); ctx.fillRect(0,0,w.w,w.h);
-        }
-        ctx.restore();
-    });
-
-    if (INPUT.rightDown) {
-        const mx = INPUT.x + camera.x; const my = INPUT.y + camera.y;
-        const bx = Math.floor(mx/TILE)*TILE; const by = Math.floor(my/TILE)*TILE;
-        ctx.save(); ctx.translate(bx - camera.x, by - camera.y);
-        ctx.strokeStyle = player.materials >= 10 ? 'lime' : 'red'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-        ctx.strokeRect(0,0,TILE,TILE); ctx.restore();
-    }
-
-    player.update();
-    
-    if (INPUT.down) {
-        const w = WEAPONS[player.weapon];
-        if (player.cd <= 0 && (player.ammo > 0 || w.ammo === Infinity)) {
-            player.cd = w.cd; if(w.ammo !== Infinity) player.ammo--; updateUI();
-            if (player.weapon === 'laser') {
-                SFX.shoot('laser');
-                const endX = player.x + Math.cos(player.angle) * 800; const endY = player.y + Math.sin(player.angle) * 800;
-                particles.push({type:'beam', x1:player.x, y1:player.y, x2:endX, y2:endY, life:10, color:'#22d3ee'});
-                enemies.forEach(e => {
-                    const A = player.x - e.x; const B = player.y - e.y; const C = endX - player.x; const D = endY - player.y;
-                    const dot = A * C + B * D; const len_sq = C * C + D * D; const param = -dot / len_sq;
-                    let xx, yy; if (param < 0) { xx = player.x; yy = player.y; } else if (param > 1) { xx = endX; yy = endY; } else { xx = player.x + param * C; yy = player.y + param * D; }
-                    if (Math.hypot(e.x - xx, e.y - yy) < e.radius + 10) e.takeDamage(w.dmg);
-                });
-            } else {
-                SFX.shoot(player.weapon);
-                for(let i=0; i<w.count; i++) {
-                    const ang = player.angle + (Math.random()-0.5)*w.spread;
-                    const v = {x:Math.cos(ang)*w.speed, y:Math.sin(ang)*w.speed};
-                    const type = (player.weapon === 'rocket' ? 'rocket' : (player.weapon === 'bouncer' ? 'bounce' : 'normal'));
-                    projectiles.push(new Projectile(player.x + Math.cos(ang)*25, player.y + Math.sin(ang)*25, 4, w.color, v, w.dmg, type, player.weapon === 'rocket' ? {radius: w.radius} : {}));
-                }
-                const recoilAmt = (player.weapon === 'shotgun' ? 5 : 2);
-                const rx = -Math.cos(player.angle) * recoilAmt;
-                const ry = -Math.sin(player.angle) * recoilAmt;
-                if (!player.checkCol(player.x + rx, player.y)) player.x += rx;
-                if (!player.checkCol(player.x, player.y + ry)) player.y += ry;
-            }
-        } else if (player.ammo <= 0 && w.ammo !== Infinity) {
-            player.weapon = 'pistol'; player.ammo = Infinity; updateUI();
-        }
-    }
-
-    turrets.forEach(t => { t.update(); t.draw(); });
-    projectiles.forEach(p => { p.update(); p.draw(); }); projectiles = projectiles.filter(p => !p.markedForDelete);
-    particles.forEach((p, i) => {
-        if(p.type === 'beam') { ctx.save(); ctx.translate(-camera.x, -camera.y); ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.lineWidth = p.life; ctx.strokeStyle = `rgba(34, 211, 238, ${p.life/10})`; ctx.shadowBlur = 20; ctx.shadowColor = p.color; ctx.stroke(); ctx.restore(); p.life--; } 
-        else if (p.type === 'shockwave') { ctx.save(); ctx.translate(p.x - camera.x, p.y - camera.y); ctx.beginPath(); ctx.arc(0,0, p.r * (1 - p.life/p.maxLife), 0, Math.PI*2); ctx.strokeStyle = `rgba(249, 115, 22, ${p.life/p.maxLife})`; ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); p.life--; } 
-        else { p.x += p.vx; p.y += p.vy; p.life -= 0.05; ctx.save(); ctx.translate(p.x - camera.x, p.y - camera.y); ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(0,0, 3, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
-    });
-    particles = particles.filter(p => p.life > 0);
-    pickups.forEach((p, i) => {
-        const bob = Math.sin(frame*0.1)*5;
-        const dx = p.x-camera.x; const dy = p.y-camera.y + bob;
-        if (dx > -50 && dx < canvas.width+50 && dy > -50 && dy < canvas.height+50) {
-             ctx.save(); ctx.translate(dx, dy);
-             ctx.fillStyle = (p.type==='nuke'?'#ff0000':(p.type==='ammo'?'#fff':(p.type==='health'?'#22c55e':WEAPONS[p.type]?WEAPONS[p.type].color:'#22d3ee')));
-             if(p.type === 'shield') ctx.fillStyle = '#60a5fa';
-             if(p.type === 'turret') ctx.fillStyle = '#fbbf24';
-             ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle; ctx.font = "20px Arial"; ctx.textAlign = "center"; 
-             let icon = "?"; if(p.type==='health') icon = "✚"; if(p.type==='shield') icon = "🛡"; if(p.type==='ammo') icon = "⑊"; if(p.type==='turret') icon = "♜"; if(p.type==='nuke') icon = "☢"; if(WEAPONS[p.type]) icon = "🔫";
-             ctx.fillText(icon, 0, 8); ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth=2; ctx.strokeRect(-12,-12,24,24); ctx.restore();
-        }
-        if (Math.hypot(player.x - p.x, player.y - p.y) < player.radius + 15) {
-            if (p.type === 'nuke') { triggerNuke(); } else {
-                SFX.play(1000, 'sine', 0.1, 0.1);
-                if (p.type === 'health') { player.health = Math.min(100, player.health+30); showMsg("HP 恢复", "text-green-400"); }
-                else if (p.type === 'shield') { player.shield = Math.min(100, player.shield+50); showMsg("能量护盾", "text-blue-400"); }
-                else if (p.type === 'ammo') { player.ammo += 50; showMsg("弹药补给", "text-white"); }
-                else if (p.type === 'turret') { player.turretCount++; showMsg("自动炮台", "text-yellow-400"); }
-                else { player.weapon = p.type; player.ammo = WEAPONS[p.type].ammo; showMsg(WEAPONS[p.type].name, "text-purple-400"); }
-                updateUI();
-            }
-            pickups.splice(i, 1);
-        }
-    });
-    enemies.forEach((e) => {
-        e.update(); e.draw();
-        projectiles.forEach(p => {
-            if (p.markedForDelete) return;
-            const dist = Math.hypot(e.x - p.x, e.y - p.y);
-            if (dist < e.radius + p.r) { if (p.type !== 'rocket') e.takeDamage(p.dmg); p.explode(); }
+            `;
+            grid.appendChild(card);
         });
-        if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
-            let dmg = 0.5; if (player.shield > 0) { player.shield -= dmg; if(player.shield < 0) { player.health += player.shield; player.shield = 0; } } else { player.health -= dmg; }
-            updateUI();
-            if (frame % 20 === 0) SFX.play(100, 'sawtooth', 0.1, 0.1);
-            if (player.health <= 0) {
-                gameRunning = false; BGM.stop();
-                document.getElementById('startMenu').classList.remove('hidden'); 
-                document.getElementById('finalScoreContainer').classList.remove('hidden'); 
-                document.getElementById('finalScore').innerText = score; 
-                document.querySelector('#startBtnText').innerText = "REBOOT SYSTEM";
-                document.getElementById('returnToTitleBtn').classList.remove('hidden'); // 显示返回按钮
+
+        // ================= 背景粒子动画逻辑 =================
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+
+        // 粒子配置
+        const config = {
+            particleCount: 80,
+            connectionDistance: 150,
+            mouseDistance: 200,
+            speed: 0.5
+        };
+
+        // 鼠标位置
+        let mouse = { x: null, y: null };
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        // 调整尺寸
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * config.speed;
+                this.vy = (Math.random() - 0.5) * config.speed;
+                this.size = Math.random() * 2 + 1;
+                this.color = `rgba(${Math.random() * 50 + 200}, ${Math.random() * 50 + 200}, 255, ${Math.random() * 0.5 + 0.1})`;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // 边界反弹
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+
+                // 鼠标交互
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < config.mouseDistance) {
+                    const forceDirectionX = dx / distance;
+                    const forceDirectionY = dy / distance;
+                    const force = (config.mouseDistance - distance) / config.mouseDistance;
+                    const directionX = forceDirectionX * force * 2; // 斥力强度
+                    const directionY = forceDirectionY * force * 2;
+
+                    this.vx -= directionX * 0.05;
+                    this.vy -= directionY * 0.05;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
             }
         }
-    });
-    enemies = enemies.filter(e => e.hp > 0);
-    const spawnRate = Math.max(25, 90 - Math.floor(score/100)); if (frame % spawnRate === 0) spawnEnemy();
-    player.draw();
-}
 
-window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-window.addEventListener('keydown', e => {
-    KEYS[e.key.toLowerCase()] = true;
-    if (e.key.toLowerCase() === 'e') { if (player && player.turretCount > 0) { turrets.push(new Turret(player.x, player.y)); player.turretCount--; updateUI(); SFX.build(); } }
-    if (e.key.toLowerCase() === 'b') { toggleShop(); }
-});
-window.addEventListener('keyup', e => KEYS[e.key.toLowerCase()] = false);
-window.addEventListener('mousemove', e => { INPUT.x = e.clientX; INPUT.y = e.clientY; });
-window.addEventListener('mousedown', e => {
-    if (e.button === 0) INPUT.down = true;
-    if (e.button === 2) {
-        INPUT.rightDown = true;
-        const mx = INPUT.x + camera.x; const my = INPUT.y + camera.y;
-        const bx = Math.floor(mx/TILE)*TILE; const by = Math.floor(my/TILE)*TILE;
-        const exists = walls.some(w => w.x === bx && w.y === by);
-        const pRect = {x: player.x-20, y: player.y-20, w:40, h:40};
-        const wRect = {x: bx, y: by, w: TILE, h: TILE};
-        const overlapPlayer = checkRectOverlap(pRect, wRect);
-        if (!exists && !overlapPlayer && player.materials >= 10) { walls.push({ x: bx, y: by, w: TILE, h: TILE, destructible: true, health: 50, maxHealth: 50 }); player.materials -= 10; updateUI(); SFX.build(); createParticles(bx+25, by+25, '#fbbf24', 5, 2); } 
-        else if (player.materials < 10 && !exists && !overlapPlayer) { SFX.error(); showMsg("材料不足!", "text-red-500"); }
-    }
-});
-window.addEventListener('mouseup', e => { if (e.button === 0) INPUT.down = false; if (e.button === 2) INPUT.rightDown = false; });
-window.addEventListener('contextmenu', e => e.preventDefault());
+        function initParticles() {
+            particles = [];
+            // 根据屏幕宽度调整粒子数量
+            const count = window.innerWidth < 768 ? 40 : config.particleCount;
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
 
-document.getElementById('startBtn').addEventListener('click', () => {
-    document.getElementById('startMenu').classList.add('hidden');
-    // Reset game over state UI
-    document.getElementById('finalScoreContainer').classList.add('hidden');
-    document.getElementById('returnToTitleBtn').classList.add('hidden');
-    gameRunning = true; isShopOpen = false;
-    BGM.start(); initGame(); animate();
-});
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
 
-// Return to Title Button
-document.getElementById('returnToTitleBtn').addEventListener('click', () => {
-    // Reset to initial state
-    document.getElementById('finalScoreContainer').classList.add('hidden');
-    document.getElementById('returnToTitleBtn').classList.add('hidden');
-    document.querySelector('#startBtnText').innerText = "INITIATE";
-    // 这里不需要做太多，因为已经在 startMenu 里了，只需重置显示状态即可
-});
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
 
-const helpMenu = document.getElementById('helpMenu');
-document.getElementById('helpBtn').addEventListener('click', () => helpMenu.classList.remove('hidden'));
-document.getElementById('closeHelpBtn').addEventListener('click', () => helpMenu.classList.add('hidden'));
+                // 绘制连线
+                for (let j = i; j < particles.length; j++) {
+                    let dx = particles[i].x - particles[j].x;
+                    let dy = particles[i].y - particles[j].y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
 
-// Shop
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isShopOpen) toggleShop();
-});
+                    if (distance < config.connectionDistance) {
+                        ctx.beginPath();
+                        let opacity = 1 - (distance / config.connectionDistance);
+                        ctx.strokeStyle = `rgba(124, 58, 237, ${opacity * 0.2})`; // 紫色连线
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
 
-// 商店恢复游戏循环的 trick: 当 toggle 关闭时调用 animate
-const originalToggleShop = toggleShop;
-toggleShop = function() {
-    if (!gameRunning && document.getElementById('startMenu').classList.contains('hidden')) return; // edge case
-    if (!gameRunning && !isShopOpen) return;
+        // 初始化
+        window.addEventListener('resize', () => {
+            resize();
+            initParticles();
+        });
+        resize();
+        initParticles();
+        animate();
 
-    const shop = document.getElementById('shopMenu');
-    isShopOpen = !isShopOpen;
-    
-    if (isShopOpen) {
-        shop.classList.remove('hidden');
-        updateUI();
-    } else {
-        shop.classList.add('hidden');
-        // Resume game
-        if(gameRunning) animate();
-    }
-};
-
-initGame();
-</script>
+    </script>
 </body>
 </html>
