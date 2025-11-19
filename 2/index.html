@@ -768,6 +768,7 @@ ${luluCharacterProfile}
         
         startScreen.addEventListener('click', () => {
             // FIX: Play audio IMMEDIATELY on user interaction to satisfy browser autoplay policies
+            bgm.loop = true;
             bgm.volume = 0.4;
             bgm.play().catch(error => {
                 console.error("Audio playback failed:", error);
