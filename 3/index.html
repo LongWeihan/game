@@ -2,1077 +2,1737 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>霓虹突袭 - 最终平衡版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"
+    <title>全球战略指挥系统 // 启动程序</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            --primary-green: #00ff9d;
+            --dim-green: #0f392b;
+            --bg-dark: #020604;
+            --grid-line: rgba(0, 255, 157, 0.08);
+            --panel-bg: rgba(2, 10, 5, 0.98);
+            --highlight: #ffffff;
+            --danger: #ff3366;
+            --score-gold: #ffae00;
+            --locked-gray: #333333;
+            --intel-blue: #00ccff;
+            --market-purple: #d946ef;
+            --ops-red: #ff3333;
+        }
+
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #050505;
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--primary-green);
             user-select: none;
         }
-        canvas { display: block; }
+
+        /* ================= 启动界面 ================= */
+        #start-screen {
+            position: fixed; inset: 0; z-index: 200;
+            background: #000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.8s ease-out;
+        }
         
-        /* 霓虹特效类 */
-        .neon-text { text-shadow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5); }
-        .neon-text-purple { text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(168, 85, 247, 0.5); }
-        .neon-text-orange { text-shadow: 0 0 10px rgba(249, 115, 22, 0.7), 0 0 20px rgba(249, 115, 22, 0.5); }
-        .neon-text-green { text-shadow: 0 0 10px rgba(34, 197, 94, 0.7), 0 0 20px rgba(34, 197, 94, 0.5); }
-        .neon-box { box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 10px rgba(6, 182, 212, 0.1); }
+        .title-glitch {
+            font-size: 72px; color: var(--primary-green); letter-spacing: 12px;
+            font-weight: bold; text-transform: uppercase;
+            text-shadow: 2px 2px 0px var(--danger), -2px -2px 0px var(--intel-blue);
+            animation: glitch-skew 3s infinite linear alternate-reverse;
+            margin-bottom: 10px; text-align: center;
+        }
+        .subtitle {
+            font-size: 18px; color: #666; letter-spacing: 8px; margin-bottom: 80px;
+            border-top: 1px solid #333; padding-top: 10px;
+        }
         
-        #ui-layer { transition: opacity 0.3s ease; }
-        .hidden { opacity: 0; pointer-events: none; display: none !important; }
-        body { cursor: crosshair; }
-        
-        /* 核弹白屏特效 */
-        #flash-layer { pointer-events: none; mix-blend-mode: screen; }
-        /* Boss 警报特效 */
-        #boss-warning { pointer-events: none; animation: pulse-red 1s infinite; }
-        
-        @keyframes pulse-red {
-            0%, 100% { opacity: 0; }
-            50% { opacity: 0.3; background-color: red; }
+        .start-btn-main {
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid var(--primary-green);
+            color: var(--primary-green);
+            padding: 20px 60px; font-size: 20px; letter-spacing: 2px;
+            font-family: inherit; cursor: pointer;
+            transition: all 0.3s;
+            position: relative; overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
+        }
+        .start-btn-main:hover {
+            background: var(--primary-green); color: #000;
+            box-shadow: 0 0 50px var(--primary-green);
+            transform: scale(1.05);
+        }
+        .start-btn-main::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: 0.5s;
+        }
+        .start-btn-main:hover::before { left: 100%; }
+
+        @keyframes glitch-skew {
+            0% { transform: skew(0deg); }
+            20% { transform: skew(-2deg); }
+            40% { transform: skew(2deg); }
+            60% { transform: skew(0deg); }
+            80% { transform: skew(1deg); }
+            100% { transform: skew(0deg); }
         }
 
-        /* 滚动条样式 */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        /* ================= 地图样式 ================= */
+        #map-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: var(--bg-dark);
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+            z-index: 0;
+            transition: filter 0.5s;
+        }
+        
+        body.setup-mode #map-container { filter: blur(4px) brightness(0.5); }
 
-        .shop-card {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(74, 222, 128, 0.3);
+        .scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.3;
+        }
+
+        .region {
+            stroke: var(--primary-green);
+            stroke-width: 1px;
+            stroke-opacity: 0.3;
+            stroke-linejoin: round;
+            transition: all 0.3s;
+            cursor: pointer;
+            fill-opacity: 0.2;
+        }
+
+        body.placement-mode .region:not(.target-region) {
+            fill-opacity: 0.05;
+            stroke-opacity: 0.1;
+            cursor: not-allowed;
+        }
+        
+        body.placement-mode .region.target-region {
+            fill: var(--primary-green);
+            fill-opacity: 0.3;
+            stroke: #fff;
+            stroke-width: 2px;
+            stroke-dasharray: 10 5;
+            animation: map-pulse 2s infinite;
+            cursor: crosshair;
+        }
+        
+        body.branch-mode .region {
+            fill: var(--primary-green);
+            fill-opacity: 0.1;
+            cursor: crosshair;
+        }
+        body.branch-mode .region:hover {
+            fill-opacity: 0.4;
+            stroke: #fff;
+        }
+
+        @keyframes map-pulse {
+            0% { fill-opacity: 0.2; }
+            50% { fill-opacity: 0.4; }
+            100% { fill-opacity: 0.2; }
+        }
+
+        .tech-node-pulse {
+            fill: none;
+            stroke: var(--primary-green);
+            stroke-width: 1.5px;
+            opacity: 0;
+            transform-origin: center;
+            animation: radar-pulse 2s infinite;
+        }
+        @keyframes radar-pulse {
+            0% { r: 2; opacity: 1; stroke-width: 2px; }
+            100% { r: 15; opacity: 0; stroke-width: 0px; }
+        }
+        
+        .player-node-pulse { stroke: #ffae00; }
+        .player-node-circle { fill: #ffae00; stroke: #fff; stroke-width: 2px; }
+        .branch-node-pulse { stroke: #00ccff; }
+        .branch-node-circle { fill: #00ccff; stroke: #fff; stroke-width: 2px; }
+
+        /* 竞争对手节点样式 */
+        .competitor-node-pulse { stroke: var(--danger); }
+        .competitor-node-circle { fill: var(--danger); stroke: #fff; stroke-width: 2px; }
+
+        /* ================= UI 基础 ================= */
+        .game-ui { display: none; opacity: 0; transition: opacity 1s; }
+        .game-ui.active { display: block; opacity: 1; }
+
+        .news-ticker-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 36px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid rgba(0, 255, 157, 0.3);
+            z-index: 50;
+            display: flex; align-items: center; overflow: hidden; white-space: nowrap;
+        }
+        .news-label {
+            background: var(--primary-green); color: #000; padding: 0 12px; height: 100%;
+            display: flex; align-items: center; font-weight: bold; font-size: 14px; z-index: 51;
+        }
+        .news-content {
+            display: inline-block;
+            color: #a3e6c7; font-size: 14px;
+            white-space: nowrap;
+        }
+        .news-content.scrolling {
+            padding-left: 100%;
+            animation: ticker 30s linear infinite;
+        }
+        @keyframes ticker { 100% { transform: translate(-100%, 0); } }
+
+        .bottom-menu-bar {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 64px;
+            background: linear-gradient(to top, rgba(0,10,5,1), rgba(0,10,5,0.8));
+            border-top: 1px solid var(--primary-green);
+            z-index: 50;
+            display: flex; justify-content: center; align-items: center; gap: 2px; padding: 0 20px;
+        }
+        .menu-btn {
+            background: rgba(0, 255, 157, 0.05);
+            border: 1px solid rgba(0, 255, 157, 0.2);
+            color: var(--primary-green);
+            padding: 0 24px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-family: 'Share Tech Mono'; font-size: 14px;
+            transition: all 0.2s; min-width: 120px;
+        }
+        .menu-btn:hover {
+            background: rgba(0, 255, 157, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 0 10px var(--primary-green);
+        }
+        .btn-primary {
+            background: var(--primary-green); color: #000; font-weight: bold;
+        }
+        .btn-primary:hover {
+            background: #fff;
+            box-shadow: 0 0 15px var(--primary-green);
+        }
+
+        /* ================= 侧边面板 ================= */
+        .overlay-panel {
+            position: absolute; inset: 0; z-index: 100;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+            transition: opacity 0.5s;
+        }
+        
+        .side-window {
+            position: absolute;
+            top: 36px; bottom: 64px; right: -600px; width: 580px; 
+            background: var(--panel-bg);
+            border-left: 1px solid var(--primary-green);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 60;
+            display: flex; flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+        .side-window.open { right: 0; }
+
+        .window-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+        }
+        .window-title {
+            font-size: 18px; margin: 0; letter-spacing: 1px; font-weight: bold;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .close-btn {
+            background: transparent; border: none; color: #666; font-size: 20px; cursor: pointer;
+            width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; transition: all 0.2s;
+        }
+        .close-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        #intel-window { border-left-color: var(--intel-blue); }
+        #intel-window .window-title { color: var(--intel-blue); }
+        
+        #market-window { border-left: 2px solid var(--market-purple); background: linear-gradient(180deg, rgba(20, 5, 20, 0.98) 0%, rgba(5, 5, 5, 0.99) 100%); }
+        #market-window .window-title { color: var(--market-purple); text-shadow: 0 0 10px rgba(217, 70, 239, 0.4); }
+
+        #ops-window { border-left-color: var(--ops-red); }
+        #ops-window .window-title { color: var(--ops-red); }
+
+        .market-ranking-row {
+            display: flex; align-items: center; padding: 12px; 
+            border-bottom: 1px solid rgba(217, 70, 239, 0.15);
+            transition: background 0.2s;
+        }
+        .market-ranking-row:hover { background: rgba(217, 70, 239, 0.05); }
+        .rank-num { 
+            width: 30px; font-weight: bold; font-size: 16px; color: #666; 
+            text-align: center; margin-right: 10px; 
+        }
+        .rank-num.top-1 { color: #ffae00; text-shadow: 0 0 5px #ffae00; }
+        .rank-num.top-2 { color: #ccc; }
+        .rank-num.top-3 { color: #b08d55; }
+
+        .setup-panel {
+            width: 900px; max-width: 95vw;
+            background: rgba(5, 15, 10, 0.95);
+            border: 1px solid var(--primary-green);
+            box-shadow: 0 0 50px rgba(0, 255, 157, 0.1);
+            display: grid; grid-template-columns: 300px 1fr;
+            height: 600px; position: relative;
+        }
+
+        .corner-deco { position: absolute; width: 10px; height: 10px; border: 2px solid var(--primary-green); }
+        .tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+        .tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+        .bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+        .br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+
+        h2 { font-size: 24px; margin-bottom: 20px; letter-spacing: 2px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        
+        input[type="text"], input[type="number"] {
+            width: 100%; background: #000; border: 1px solid #333;
+            color: #fff; padding: 10px; font-family: 'Share Tech Mono';
+            font-size: 16px; outline: none;
+        }
+        input[type="text"]:focus, input[type="number"]:focus { border-color: var(--primary-green); }
+
+        input[type="range"] {
+            width: 100%; -webkit-appearance: none; background: transparent;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            border-radius: 50%; background: var(--primary-green);
+            margin-top: -5px; cursor: pointer; box-shadow: 0 0 5px var(--primary-green);
+            border: 2px solid #fff;
+        }
+        
+        .tabs { display: flex; border-bottom: 1px solid #333; margin-bottom: 10px; }
+        .tab-btn {
+            flex: 1; padding: 12px; text-align: center; cursor: pointer;
+            color: #666; border-bottom: 2px solid transparent; font-size: 14px; font-weight: bold;
             transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .tab-btn.active {
+            color: var(--primary-green); border-bottom-color: var(--primary-green);
+            background: rgba(0,255,157,0.05);
+        }
+
+        #intel-tabs .tab-btn.active {
+            color: var(--intel-blue); border-bottom-color: var(--intel-blue);
+            background: rgba(0, 204, 255, 0.05);
+        }
+
+        /* === 科技树节点样式 === */
+        .tech-row { display: flex; align-items: center; margin-bottom: 24px; }
+        .tech-label { width: 110px; font-size: 12px; color: #888; text-align: right; padding-right: 15px; line-height: 1.4; }
+        .tech-track { flex: 1; display: flex; gap: 12px; position: relative; align-items: center; }
+        .tech-track::before { 
+            content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 1px; 
+            background: #444; z-index: 0; 
+        }
+        .tech-node-btn {
+            width: 90px; height: 54px; background: #0a0a0a; 
+            border: 1px solid #333; z-index: 1;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; transition: all 0.2s;
+            padding: 2px 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .tech-node-btn span.name {
+            font-size: 11px; line-height: 1.2; text-align: center;
+            color: #ccc; font-weight: bold; margin-bottom: 2px;
+        }
+        .tech-node-btn.unlocked {
+            background: rgba(0, 255, 157, 0.08); 
+            border-color: var(--primary-green); 
+            box-shadow: 0 0 8px rgba(0, 255, 157, 0.15);
+        }
+        .tech-node-btn.unlocked span.name { color: #fff; }
+        .tech-node-btn.next-unlock {
+            background: #1a1a1a; border-color: #ffff00; 
+            box-shadow: 0 0 8px rgba(255, 255, 0, 0.15);
+        }
+        .tech-node-btn.next-unlock span.name { color: #ffea00; }
+        .tech-node-btn.locked {
+            background: #050505; border-color: #222; cursor: not-allowed; opacity: 0.7;
+        }
+        .tech-node-btn.locked span.name { color: #444; }
+        .tech-node-btn.selected-node {
+            border-color: #fff; 
+            box-shadow: 0 0 15px rgba(255,255,255,0.3);
+            transform: scale(1.05);
+            z-index: 2;
+        }
+        
+        .node-cap { font-size: 10px; color: #666; }
+        .unlocked .node-cap { color: var(--primary-green); }
+
+        .chain-card {
+            border: 1px solid #333; padding: 15px; cursor: pointer;
+            margin-bottom: 15px; opacity: 0.6; transition: all 0.2s;
+        }
+        .chain-card.selected {
+            border-color: var(--primary-green); background: rgba(0, 255, 157, 0.05); opacity: 1;
+        }
+        
+        .region-select-btn {
+            display: block; width: 100%; padding: 10px; margin-bottom: 5px;
+            background: transparent; border: 1px solid transparent; color: #888; text-align: left;
+        }
+        .region-select-btn.active {
+            border: 1px solid var(--primary-green); color: var(--primary-green); background: rgba(0, 255, 157, 0.1);
+        }
+
+        #start-btn {
+            width: 100%; padding: 15px; margin-top: 20px;
+            background: var(--primary-green); color: #000; border: none;
+            font-weight: bold; font-family: 'Share Tech Mono'; font-size: 18px;
+            cursor: pointer; opacity: 0.5; pointer-events: none;
+        }
+        #start-btn.ready { opacity: 1; pointer-events: all; box-shadow: 0 0 20px var(--primary-green); }
+
+        #tooltip {
+            position: absolute; padding: 16px; background: rgba(5, 5, 5, 0.95);
+            border: 1px solid var(--primary-green); color: var(--primary-green);
+            pointer-events: none; font-size: 14px; box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
+            opacity: 0; transition: opacity 0.1s; z-index: 200; min-width: 220px;
+            backdrop-filter: blur(5px);
+        }
+
+        /* 放置提示 */
+        #placement-hint {
+            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid var(--primary-green);
+            padding: 20px 40px; z-index: 90; display: none; text-align: center;
+        }
+
+        /* 市场份额条形图 */
+        .market-bar-container {
+            width: 100%; height: 24px; background: #111; display: flex; margin-bottom: 8px; border: 1px solid #333;
+        }
+        .market-bar-segment {
+            height: 100%; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; color: #000; font-weight: bold; overflow: hidden; white-space: nowrap;
+            transition: width 0.5s;
+        }
+        
+        /* 企业列表项 */
+        .company-item {
+            padding: 12px; border-bottom: 1px solid #222; cursor: pointer; transition: background 0.2s;
+        }
+        .company-item:hover { background: rgba(255,255,255,0.05); }
+        .company-item.active { background: rgba(0, 204, 255, 0.1); border-left: 2px solid var(--intel-blue); }
+        
+        .spec-comparison-row {
+            display: flex; align-items: center; margin-bottom: 6px; font-size: 12px;
+        }
+        .spec-label { width: 90px; color: #999; text-align: right; margin-right: 12px; }
+        .spec-bar-bg { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+        .spec-bar-fill { height: 100%; background: var(--intel-blue); }
+        .spec-val { width: 30px; text-align: right; color: #fff; margin-left: 8px; font-weight: bold; }
+
+        /* Chart */
+        #valuation-chart { width: 100%; height: 150px; background: #111; border: 1px solid #333; }
+
+        /* ================= 秘密行动特定样式 ================= */
+        .op-card {
+            position: relative;
+            background: linear-gradient(45deg, rgba(20,0,0,0.9), rgba(40,0,0,0.8));
+            border: 1px solid rgba(255, 51, 102, 0.3);
+            padding: 16px; margin-bottom: 12px;
+            transition: all 0.3s;
+            overflow: hidden;
             cursor: pointer;
         }
-        .shop-card:hover {
-            background: rgba(74, 222, 128, 0.1);
-            border-color: rgba(74, 222, 128, 0.8);
-            transform: scale(1.02);
-            box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+        .op-card:hover {
+            border-color: var(--ops-red);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.2);
+            transform: translateX(5px);
         }
-        .weapon-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.2s;
+        .op-card:hover::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--ops-red);
         }
-        .weapon-card:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(0, 255, 255, 0.3);
-            transform: translateY(-2px);
+        .op-badge {
+            font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 2px;
+            margin-right: 5px; display: inline-block;
         }
+        .badge-rival { background: rgba(255, 51, 102, 0.2); color: var(--ops-red); border: 1px solid var(--ops-red); }
+        .badge-upstream { background: rgba(255, 174, 0, 0.2); color: #ffae00; border: 1px solid #ffae00; }
+        .badge-downstream { background: rgba(0, 204, 255, 0.2); color: #00ccff; border: 1px solid #00ccff; }
+        
+        .ops-console {
+            background: #050101; border: 1px solid var(--ops-red); padding: 10px;
+            font-family: 'Courier New', Courier, monospace; font-size: 12px; color: var(--ops-red);
+            height: 120px; overflow-y: auto; text-shadow: 0 0 2px var(--ops-red);
+        }
+        .console-line { margin-bottom: 4px; opacity: 0.8; }
+        .console-line.success { color: #00ff9d; text-shadow: 0 0 2px #00ff9d; }
+        .console-line.fail { color: #ff0000; font-weight: bold; }
+
     </style>
 </head>
-<body>
+<body class="setup-mode">
 
-    <!-- 特效层 -->
-    <div id="flash-layer" class="absolute inset-0 bg-white opacity-0 z-50 transition-opacity duration-1000"></div>
-    <div id="boss-warning" class="absolute inset-0 z-40 opacity-0 hidden"></div>
+    <div class="scanline"></div>
 
-    <!-- 游戏 UI 层 -->
-    <div id="ui-layer" class="absolute inset-0 z-10 pointer-events-none">
-        
-        <!-- 顶部 HUD -->
-        <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-start">
-            <!-- 左侧：分数与资源 -->
-            <div class="flex flex-col gap-2">
-                <div>
-                    <span class="text-xs text-gray-400 tracking-widest uppercase">SCORE</span>
-                    <div id="scoreEl" class="text-3xl font-bold text-cyan-400 neon-text">0</div>
-                </div>
-                <div class="flex gap-6 mt-2">
-                    <div>
-                        <span class="text-xs text-gray-400 tracking-widest uppercase">CREDITS</span>
-                        <div class="flex items-center text-green-400 neon-text-green">
-                            <span class="text-xl mr-1">$</span>
-                            <span class="text-2xl font-bold" id="creditsEl">0</span>
-                            <span class="text-[10px] ml-2 border border-green-500/50 px-1 rounded text-green-300 bg-green-900/30">按 B 购物</span>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="text-xs text-gray-400 tracking-widest uppercase">NANO-MATS</span>
-                        <div class="flex items-center text-orange-400 neon-text-orange">
-                            <span class="text-xl mr-1">⚙</span>
-                            <span class="text-2xl font-bold" id="materialEl">0</span>
-                            <span class="text-[10px] ml-2 border border-orange-500/50 px-1 rounded text-orange-300 bg-orange-900/30">右键建造</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 中间：武器状态 -->
-            <div class="absolute left-1/2 -translate-x-1/2 top-6 flex flex-col items-center">
-                <div class="text-xs text-gray-400 tracking-widest uppercase mb-1">WEAPON SYSTEM</div>
-                <div class="flex items-center space-x-4 bg-gray-900/90 backdrop-blur px-8 py-3 rounded-full border border-gray-700 neon-box transform scale-110">
-                    <span id="weaponName" class="text-xl font-bold text-yellow-400">PISTOL</span>
-                    <div class="h-8 w-px bg-gray-600"></div>
-                    <span id="ammoEl" class="text-2xl font-mono text-white">∞</span>
-                </div>
-                <!-- 炮台状态 -->
-                <div id="turretStatus" class="mt-2 text-xs text-gray-500 opacity-0 transition-opacity">
-                    [E] 部署炮台 (<span id="turretCount">0</span>)
-                </div>
-            </div>
-
-            <!-- 右侧：生命值 -->
-            <div class="flex flex-col items-end">
-                 <span class="text-xs text-gray-400 tracking-widest uppercase">INTEGRITY</span>
-                 <div class="w-56 h-5 bg-gray-800 rounded-full overflow-hidden border border-gray-700 mt-2 relative shadow-lg">
-                     <div id="healthBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 w-full transition-all duration-200"></div>
-                     <!-- 护盾层 -->
-                     <div id="shieldBar" class="absolute top-0 left-0 h-full bg-blue-400/50 w-0 transition-all duration-200"></div>
-                 </div>
-                 <div id="healthText" class="mt-1 text-xs font-mono text-cyan-300">100%</div>
-            </div>
-        </div>
-
-        <!-- 拾取提示 / Boss 警告 -->
-        <div id="pickupMsg" class="absolute top-40 w-full text-center transition-opacity duration-500 opacity-0">
-            <div class="inline-block bg-black/70 text-white px-6 py-3 rounded-lg border border-white/20 backdrop-blur transform scale-110">
-                <span id="pickupIcon" class="text-2xl mr-2">🎁</span>
-                获得 <span id="pickupName" class="font-bold text-yellow-400">物品</span>
-            </div>
-        </div>
-
-        <!-- 商店菜单 (覆盖层) -->
-        <div id="shopMenu" class="absolute inset-0 bg-black/80 backdrop-blur-sm z-[55] pointer-events-auto flex flex-col items-center justify-center hidden">
-            <div class="w-full max-w-5xl bg-gray-900 border border-green-500/30 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(34,197,94,0.1)]">
-                <!-- Header -->
-                <div class="p-6 border-b border-green-900/50 flex justify-between items-center bg-black/40">
-                    <div class="flex items-center gap-4">
-                        <h2 class="text-3xl font-black text-green-400 tracking-widest italic">BLACK MARKET</h2>
-                        <div class="px-3 py-1 bg-green-900/30 rounded border border-green-500/30 text-green-300 text-sm">
-                            当前信用点: $<span id="shopCredits">0</span>
-                        </div>
-                    </div>
-                    <div class="text-gray-400 text-sm">按 [B] 或 [ESC] 关闭</div>
-                </div>
-                
-                <!-- Items Grid -->
-                <div class="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- 商品 -->
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('repair')">
-                        <div class="text-4xl mb-3">✚</div>
-                        <h3 class="text-xl font-bold text-white">紧急修复协议</h3>
-                        <p class="text-sm text-gray-400 mb-4">立即修复受损机体，恢复 50 点生命值。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$100</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('ammo')">
-                        <div class="text-4xl mb-3">⑊</div>
-                        <h3 class="text-xl font-bold text-white">弹药补给箱</h3>
-                        <p class="text-sm text-gray-400 mb-4">填满当前武器的所有弹药 (无限武器除外)。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$50</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('shield')">
-                        <div class="text-4xl mb-3">🛡</div>
-                        <h3 class="text-xl font-bold text-white">粒子护盾电池</h3>
-                        <p class="text-sm text-gray-400 mb-4">为护盾发生器充能 +50% (可超载)。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$150</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('turret')">
-                        <div class="text-4xl mb-3 text-yellow-400">♜</div>
-                        <h3 class="text-xl font-bold text-white">哨戒炮台</h3>
-                        <p class="text-sm text-gray-400 mb-4">增加 1 个自动炮台库存。建立防线的关键。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$200</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group" onclick="buyItem('material')">
-                        <div class="text-4xl mb-3 text-orange-400">⚙</div>
-                        <h3 class="text-xl font-bold text-white">纳米材料包</h3>
-                        <p class="text-sm text-gray-400 mb-4">购买 50 单位的建筑材料用于建造掩体。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-green-400 font-mono font-bold text-xl">$75</span>
-                            <button class="px-4 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">购买</button>
-                        </div>
-                    </div>
-
-                    <div class="shop-card p-5 rounded-xl flex flex-col relative group border-red-500/30 hover:border-red-500" onclick="buyItem('nuke')">
-                        <div class="text-4xl mb-3 text-red-500">☢</div>
-                        <h3 class="text-xl font-bold text-red-100">战术核弹发射器</h3>
-                        <p class="text-sm text-gray-400 mb-4">购买后立即引爆，清除全屏敌人。慎用。</p>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-red-400 font-mono font-bold text-xl">$1000</span>
-                            <button class="px-4 py-1 bg-red-900 hover:bg-red-700 text-white rounded text-sm font-bold border border-red-500">授权</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="p-4 bg-black/60 text-center text-xs text-gray-500">
-                    战术提示: 即使在商店界面，背景世界依然处于静止状态 (Time Frozen)。
-                </div>
-            </div>
-        </div>
-
-        <!-- 主菜单 -->
-        <div id="startMenu" class="absolute inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md pointer-events-auto z-50">
-            <div class="p-10 rounded-2xl border border-cyan-500/30 shadow-[0_0_60px_rgba(6,182,212,0.15)] text-center max-w-lg w-full relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 via-cyan-500 to-purple-500 animate-pulse"></div>
-
-                <h1 class="text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-purple-500 neon-text italic tracking-tighter">NEON RAID</h1>
-                <h2 class="text-2xl text-purple-400 font-bold mb-8 tracking-[0.5em] uppercase text-shadow">Tactical</h2>
-                
-                <!-- Game Over Section -->
-                <div id="finalScoreContainer" class="hidden mb-8 p-6 bg-red-950/40 border border-red-500/50 rounded-lg">
-                    <p class="text-gray-400 text-xs uppercase tracking-widest mb-2">Mission Terminated</p>
-                    <p id="finalScore" class="text-6xl font-bold text-red-500 neon-text-orange">0</p>
-                </div>
-
-                <div class="space-y-4">
-                    <button id="startBtn" class="w-full py-5 bg-gradient-to-r from-cyan-700 to-purple-700 hover:from-cyan-600 hover:to-purple-600 text-white font-bold rounded-lg text-2xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:scale-[1.02] uppercase tracking-widest group relative overflow-hidden">
-                        <span class="relative z-10" id="startBtnText">INITIATE</span>
-                        <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                    </button>
-
-                    <!-- New Button: Return to Title -->
-                    <button id="returnToTitleBtn" class="hidden w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg text-lg transition-all border border-gray-600 uppercase tracking-widest">
-                        返回主界面 (Main Menu)
-                    </button>
-                    
-                    <button id="helpBtn" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-cyan-400 font-bold rounded-lg text-lg transition-all border border-cyan-500/30 uppercase tracking-widest">
-                        战术手册 (Help)
-                    </button>
-                </div>
-                
-                <div class="mt-6 text-xs text-gray-500">
-                    v 2.1.0 | BOSS 战调整 | 粒子优化
-                </div>
-            </div>
-        </div>
-
-        <!-- 帮助菜单 (覆盖层) -->
-        <div id="helpMenu" class="absolute inset-0 bg-black/95 backdrop-blur-xl z-[60] pointer-events-auto flex flex-col items-center justify-center hidden">
-            <div class="w-full max-w-4xl h-[85vh] flex flex-col bg-gray-900/50 border border-cyan-500/30 rounded-2xl overflow-hidden shadow-2xl">
-                <!-- Header -->
-                <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-black/40">
-                    <h2 class="text-3xl font-bold text-cyan-400 tracking-widest">战术手册 TACTICAL MANUAL</h2>
-                    <button id="closeHelpBtn" class="text-gray-400 hover:text-white text-4xl font-light focus:outline-none">&times;</button>
-                </div>
-                
-                <!-- Content -->
-                <div class="flex-1 overflow-y-auto p-8 space-y-8">
-                    
-                    <!-- 1. Controls -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-cyan-500 pl-3">操作指南 / CONTROLS</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">WASD</div>
-                                <div class="text-gray-400">战术移动</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">MOUSE</div>
-                                <div class="text-gray-400">瞄准与射击 (左键)</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">右键 (Right Click)</div>
-                                <div class="text-gray-400">消耗10材料建造掩体 (子弹可穿透)</div>
-                            </div>
-                            <div class="bg-gray-800/50 p-4 rounded border border-gray-700">
-                                <div class="text-cyan-400 font-bold mb-1">E 键 / B 键</div>
-                                <div class="text-gray-400">放置炮台 / 打开商店</div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 2. Weapons -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-yellow-500 pl-3">武器库 / ARSENAL</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-yellow-400">手枪</span> <span class="text-xs text-gray-500">无限</span></div>
-                                <p class="text-xs text-gray-400">基础武器，精准度高，无后坐力。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-purple-400">突击步枪</span> <span class="text-xs text-gray-500">普通</span></div>
-                                <p class="text-xs text-gray-400">全自动射击，适合中距离压制。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-red-500">防空霰弹炮</span> <span class="text-xs text-gray-500">近战</span></div>
-                                <p class="text-xs text-gray-400">一次发射多枚弹片，近距离爆发极高，后坐力大。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-green-400">加特林机枪</span> <span class="text-xs text-gray-500">火力</span></div>
-                                <p class="text-xs text-gray-400">射速极快，载弹量大，但开火时会降低移动速度。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-pink-400">弹射光盘</span> <span class="text-xs text-gray-500">战术</span></div>
-                                <p class="text-xs text-gray-400">发射在墙壁间反弹的高能光盘，清理死角敌人。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-orange-500">RPG 火箭筒</span> <span class="text-xs text-gray-500">爆炸</span></div>
-                                <p class="text-xs text-gray-400">造成大范围爆炸伤害，能有效清除密集的敌人。</p>
-                            </div>
-                            <div class="weapon-card p-4 rounded">
-                                <div class="flex justify-between mb-2"><span class="font-bold text-cyan-400">磁轨炮 (Laser)</span> <span class="text-xs text-gray-500">穿透</span></div>
-                                <p class="text-xs text-gray-400">瞬间穿透直线上所有敌人，伤害极高。</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 3. Items -->
-                    <section>
-                        <h3 class="text-xl font-bold text-white mb-4 border-l-4 border-blue-500 pl-3">战术道具 / SUPPORT</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1 text-green-400">$</div>
-                                <div class="text-xs font-bold text-green-400">信用点</div>
-                                <div class="text-[10px] text-gray-500">击杀敌人获取，用于购物</div>
-                            </div>
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1">✚</div>
-                                <div class="text-xs font-bold text-green-400">医疗包</div>
-                                <div class="text-[10px] text-gray-500">+30 HP</div>
-                            </div>
-                            <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1">🛡</div>
-                                <div class="text-xs font-bold text-blue-400">能量盾</div>
-                                <div class="text-[10px] text-gray-500">额外护盾</div>
-                            </div>
-                             <div class="p-3 bg-gray-800/30 rounded border border-gray-700">
-                                <div class="text-2xl mb-1 text-yellow-400">♜</div>
-                                <div class="text-xs font-bold text-yellow-400">自动炮台</div>
-                                <div class="text-[10px] text-gray-500">按 E 部署 (掉落率提升)</div>
-                            </div>
-                            <div class="p-3 bg-red-900/20 rounded border border-red-500/50">
-                                <div class="text-2xl mb-1 text-red-500">☢</div>
-                                <div class="text-xs font-bold text-red-500">战术核弹</div>
-                                <div class="text-[10px] text-gray-500">全屏清除</div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </div>
-        </div>
-
+    <div id="start-screen">
+        <div class="title-glitch">晶圆帝国：秩序</div>
+        <div class="subtitle">WAFER EMPIRE: ORDER</div>
+        <button class="start-btn-main" onclick="initGameUI()">[ INITIALIZE_SYSTEM ]</button>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
+    <div class="game-ui">
+        <div class="news-ticker-container">
+            <div class="news-label">GLOBAL_FEED //</div>
+            <div class="news-content" id="news-content"></div>
+        </div>
 
-<script>
-// ---------------- 音乐与音效系统 ----------------
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const BGM = {
-    isPlaying: false, tempo: 130, nextNoteTime: 0, beatCount: 0, bassNotes: [36, 36, 38, 36, 43, 43, 41, 41], timerID: null,
-    start: function() { if(this.isPlaying)return; if(audioCtx.state==='suspended')audioCtx.resume(); this.isPlaying=true; this.nextNoteTime=audioCtx.currentTime; this.beatCount=0; this.scheduler(); },
-    stop: function() { this.isPlaying=false; clearTimeout(this.timerID); },
-    scheduler: function() { while(this.nextNoteTime<audioCtx.currentTime+0.1){ this.playBeat(this.nextNoteTime, this.beatCount); this.scheduleNextBeat(); } if(this.isPlaying)this.timerID=setTimeout(()=>this.scheduler(),25); },
-    scheduleNextBeat: function() { this.nextNoteTime+=60.0/this.tempo*0.25; this.beatCount++; },
-    playBeat: function(time, beat) { if(beat%4===0)this.playKick(time); if(beat%4===2)this.playHat(time); if(beat%16===4||beat%16===12)this.playSnare(time); if(beat%2===0){const idx=Math.floor(beat/16)%this.bassNotes.length;this.playBass(time,440*Math.pow(2,(this.bassNotes[idx]-69)/12));} },
-    playKick: (t)=>{const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(0.01,t+0.5);g.gain.setValueAtTime(1,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.5);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.5);},
-    playSnare: (t)=>{const b=audioCtx.createBuffer(1,audioCtx.sampleRate*0.2,audioCtx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<b.length;i++)d[i]=Math.random()*2-1;const s=audioCtx.createBufferSource();s.buffer=b;const g=audioCtx.createGain();const f=audioCtx.createBiquadFilter();f.type='highpass';f.frequency.value=1000;g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.2);s.connect(f);f.connect(g);g.connect(audioCtx.destination);s.start(t);},
-    playHat: (t)=>{const o=audioCtx.createOscillator();o.type='square';o.frequency.value=4000;const g=audioCtx.createGain();const f=audioCtx.createBiquadFilter();f.type='bandpass';f.frequency.value=10000;g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.05);o.connect(f);f.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.05);},
-    playBass: (t,f)=>{const o=audioCtx.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(f,t);const g=audioCtx.createGain();const fl=audioCtx.createBiquadFilter();fl.type='lowpass';fl.frequency.setValueAtTime(800,t);fl.frequency.exponentialRampToValueAtTime(200,t+0.2);g.gain.setValueAtTime(0.3,t);g.gain.linearRampToValueAtTime(0,t+0.2);o.connect(fl);fl.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+0.2);}
-};
+        <div class="absolute top-[60px] left-5 z-40 pointer-events-none">
+            <div class="text-2xl font-bold text-white tracking-widest"><span id="hud-company-name">UNKNOWN</span> <span class="text-[var(--primary-green)]">CORP</span></div>
+            <div class="text-xs text-green-400 opacity-70 mt-1">// SECTOR: <span id="hud-sector">--</span> // REGION: <span id="hud-region">--</span></div>
+            <div class="text-lg font-bold text-white mt-2 border-t border-green-900/50 pt-1" id="date-display">2030-01</div>
+        </div>
 
-const SFX = {
-    play: (freq, type, dur, vol=0.1) => { const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type; o.frequency.setValueAtTime(freq,audioCtx.currentTime); g.gain.setValueAtTime(vol,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+dur); },
-    shoot: (type) => {
-        if(type==='pistol') SFX.play(600,'triangle',0.1,0.1);
-        if(type==='shotgun') { SFX.play(150,'sawtooth',0.3,0.2); SFX.play(100,'square',0.2,0.2); }
-        if(type==='rifle') SFX.play(500,'square',0.08,0.08);
-        if(type==='minigun') SFX.play(400,'sawtooth',0.05,0.1);
-        if(type==='rocket') { SFX.play(200,'sawtooth',0.5,0.2); SFX.play(50,'square',1.0,0.5); }
-        if(type==='bouncer') SFX.play(800,'sine',0.1,0.2);
-        if(type==='laser') { const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.frequency.setValueAtTime(2000,audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(100,audioCtx.currentTime+0.3); g.gain.setValueAtTime(0.2,audioCtx.currentTime); g.gain.linearRampToValueAtTime(0,audioCtx.currentTime+0.3); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.3); }
-    },
-    nuke: () => { const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = 'lowpass'; o.frequency.value = 50; SFX.play(50, 'sawtooth', 3.0, 0.8); SFX.play(100, 'square', 1.0, 0.5); },
-    build: () => SFX.play(1200,'sine',0.1,0.3),
-    error: () => SFX.play(150,'sawtooth',0.2,0.2),
-    buy: () => SFX.play(1000,'square',0.1,0.2),
-    explode: () => { const b=audioCtx.createBuffer(1,audioCtx.sampleRate*0.5,audioCtx.sampleRate); const d=b.getChannelData(0); for(let i=0;i<b.length;i++)d[i]=Math.random()*2-1; const s=audioCtx.createBufferSource(); s.buffer=b; const g=audioCtx.createGain(); g.gain.setValueAtTime(0.5,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.5); s.connect(g); g.connect(audioCtx.destination); s.start(); }
-};
+        <div class="absolute top-[60px] right-5 z-40">
+            <div class="border border-green-500/30 bg-black/80 p-3 text-right">
+                <div class="text-xs text-gray-400">CASH RESERVES</div>
+                <div class="text-xl text-white font-bold">$<span id="cash-display">--</span> B</div>
+                <div class="text-[10px] text-green-500" id="profit-display">+0.0 B / month</div>
+            </div>
+        </div>
 
-const canvas = document.querySelector('#gameCanvas');
-const ctx = canvas.getContext('2d');
-const WORLD_W = 2500, WORLD_H = 2500, TILE = 50;
+        <div class="bottom-menu-bar">
+            <button class="menu-btn" onclick="toggleIntelWindow()">全球情报<br><span class="text-[10px] opacity-50">INTEL</span></button>
+            <button class="menu-btn" onclick="toggleTechWindow()">核心研发<br><span class="text-[10px] opacity-50">R&D LAB</span></button>
+            <button class="menu-btn" onclick="toggleMarketWindow()">资本运作<br><span class="text-[10px] opacity-50">MARKET</span></button>
+            <button class="menu-btn" style="color: var(--ops-red); border-color:rgba(255,51,102,0.3);" onclick="toggleOpsWindow()">秘密行动<br><span class="text-[10px] opacity-50">BLACK OPS</span></button>
+            <div class="w-px h-8 bg-green-800 mx-2"></div>
+            <button class="menu-btn btn-primary border-green-500" onclick="toggleProductWindow()">
+                发布产品<br><span class="text-[10px] opacity-50">LAUNCH</span>
+            </button>
+        </div>
+    </div>
 
-let gameRunning = false;
-let isShopOpen = false;
-let score = 0;
-let frame = 0;
-let animationId;
-let camera = { x: 0, y: 0 };
-let nextBossScore = 1000;
+    <div id="intel-window" class="side-window">
+        <div class="window-header">
+            <h2 class="window-title">全球情报中心</h2>
+            <button class="close-btn" onclick="toggleIntelWindow()">✕</button>
+        </div>
+        <div class="tabs" id="intel-tabs"></div>
+        <div class="flex-1 overflow-y-auto p-4 flex flex-col">
+            <div class="mb-6">
+                <div class="flex justify-between items-end mb-2">
+                    <span class="text-sm text-gray-400 font-bold">市场总规模 (TAM)</span>
+                    <span class="text-xl text-white font-bold" id="market-size-display">$0 B</span>
+                </div>
+                <div class="market-bar-container rounded" id="market-share-bar"></div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1"><span>DOMINANCE</span><span>FRAGMENTATION</span></div>
+            </div>
+            <div class="mb-4 flex-1">
+                <div class="text-xs text-[var(--intel-blue)] font-bold border-b border-gray-800 pb-1 mb-2">主要竞争实体</div>
+                <div id="competitor-list" class="flex flex-col"></div>
+            </div>
+            <div id="product-detail-panel" class="bg-black/50 border border-gray-700 p-4 rounded min-h-[150px]">
+                <div class="text-center text-gray-500 text-sm mt-4">请选择上方企业查看产品分析...</div>
+            </div>
+        </div>
+    </div>
 
-let player, projectiles, enemies, enemyProjectiles, particles, walls, pickups, turrets;
+    <div id="product-window" class="side-window">
+        <div class="window-header">
+            <h2 class="window-title">产品设计中心</h2>
+            <button class="close-btn" onclick="toggleProductWindow()">✕</button>
+        </div>
+        <div class="tabs" id="product-tabs"></div>
+        <div class="p-6 overflow-y-auto flex-1 relative">
+            <div id="product-locked-mask" class="absolute inset-0 bg-black/90 z-50 flex flex-col items-center justify-center" style="display: none;">
+                <div class="text-red-500 text-xl font-bold mb-2">SECTOR LOCKED</div>
+                <div class="text-gray-400 text-sm text-center max-w-xs">该产业链尚未建立研发机构。<br>请前往 [核心研发] 成立分部。</div>
+            </div>
+            <div class="mb-6">
+                <label class="text-sm text-gray-400 block mb-2">产品代号 / CODENAME</label>
+                <input type="text" id="product-name" placeholder="e.g. Neural-Link X1" value="Project Alpha">
+            </div>
+            <div class="mb-6">
+                <label class="text-sm text-green-400 block mb-3 font-bold border-b border-gray-800 pb-1">技术规格 / SPECS</label>
+                <div class="mb-4"><div class="flex justify-between text-sm mb-1"><span id="label-spec-1" class="text-white">--</span><span class="text-green-400"><span id="val-spec-1">20</span> / <span id="max-spec-1" class="text-gray-500">20</span></span></div><input type="range" min="1" max="100" value="20" oninput="updateProductStats()" id="slider-1"></div>
+                <div class="mb-4"><div class="flex justify-between text-sm mb-1"><span id="label-spec-2" class="text-white">--</span><span class="text-green-400"><span id="val-spec-2">20</span> / <span id="max-spec-2" class="text-gray-500">20</span></span></div><input type="range" min="1" max="100" value="20" oninput="updateProductStats()" id="slider-2"></div>
+                <div class="mb-4"><div class="flex justify-between text-sm mb-1"><span id="label-spec-3" class="text-white">--</span><span class="text-green-400"><span id="val-spec-3">20</span> / <span id="max-spec-3" class="text-gray-500">20</span></span></div><input type="range" min="1" max="100" value="20" oninput="updateProductStats()" id="slider-3"></div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                 <div class="bg-gray-900 p-2 rounded border border-gray-700">
+                    <div class="text-xs text-gray-400">产品力 (Potential Cap)</div>
+                    <div class="text-lg text-white font-bold" id="calc-power">0%</div>
+                 </div>
+                 <div class="bg-gray-900 p-2 rounded border border-gray-700">
+                    <div class="text-xs text-gray-400">竞争力 (Actual Grab)</div>
+                    <div class="text-lg font-bold" id="calc-score">0</div>
+                 </div>
+            </div>
 
-const WEAPONS = {
-    pistol: { name: 'PISTOL', color: '#facc15', cd: 20, speed: 14, dmg: 1, spread: 0.05, count: 1, ammo: Infinity },
-    rifle: { name: 'ASSAULT RIFLE', color: '#a855f7', cd: 6, speed: 20, dmg: 0.8, spread: 0.15, count: 1, ammo: 120 },
-    shotgun: { name: 'FLAK CANNON', color: '#ef4444', cd: 45, speed: 12, dmg: 1.2, spread: 0.5, count: 6, ammo: 20 },
-    minigun: { name: 'MINIGUN', color: '#10b981', cd: 3, speed: 18, dmg: 0.5, spread: 0.25, count: 1, ammo: 300 },
-    bouncer: { name: 'RICOCHET', color: '#ec4899', cd: 15, speed: 11, dmg: 2.5, spread: 0.05, count: 1, ammo: 25, type: 'bounce' },
-    rocket: { name: 'RPG LAUNCHER', color: '#f97316', cd: 60, speed: 10, dmg: 10, spread: 0.05, count: 1, ammo: 10, explosive: true, radius: 120 },
-    laser: { name: 'RAILGUN', color: '#22d3ee', cd: 70, speed: 0, dmg: 5, spread: 0, count: 1, ammo: 15, type: 'rail' }
-};
+            <div class="bg-black/50 p-4 border border-gray-700 rounded mb-4">
+                <div class="flex justify-between items-center mb-2"><span class="text-xs text-gray-400">研发/生产成本 (Cost)</span><span class="text-sm text-red-400">$<span id="calc-cost">0</span></span></div>
+                <div class="flex justify-between items-center mb-4"><span class="text-xs text-gray-400">建议售价 (Price)</span><div class="flex items-center"><span class="text-gray-500 text-xs mr-1">$</span><input type="number" id="product-price" class="w-20 p-1 text-right text-sm" value="1000" oninput="updateProfit()"></div></div>
+                <div class="h-px bg-gray-700 mb-2"></div>
+                <div class="flex justify-between items-center mb-2"><span class="text-xs text-white font-bold">利润率 (Margin)</span><span class="text-lg font-bold" id="calc-margin">0%</span></div>
+            </div>
+            <button id="launch-btn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded shadow-[0_0_10px_rgba(0,255,0,0.3)] transition-all" onclick="launchProduct()">确认发布 / LAUNCH</button>
+        </div>
+    </div>
 
-const INPUT = { x: 0, y: 0, down: false, rightDown: false };
-const KEYS = {};
+    <div id="tech-window" class="side-window">
+        <div class="window-header">
+            <h2 class="window-title">核心研发实验室</h2>
+            <button class="close-btn" onclick="toggleTechWindow()">✕</button>
+        </div>
+        <div class="tabs" id="tech-tabs"></div>
+        <div class="p-6 overflow-y-auto flex-1 relative" id="tech-content"></div>
+        <div id="tech-detail-panel" class="p-6 border-t border-gray-800 bg-black min-h-[140px] flex flex-col justify-center"><div class="text-center text-gray-500 text-sm">点击上方科技节点查看详细信息...</div></div>
+    </div>
 
-class Player {
-    constructor(x, y) {
-        this.x = x; this.y = y; this.radius = 16; this.color = '#06b6d4';
-        this.baseSpeed = 5.5; this.speed = 5.5; this.maxHealth = 100; this.health = 100;
-        this.shield = 0; this.materials = 50; this.credits = 0; this.turretCount = 0;
-        this.weapon = 'pistol'; this.ammo = Infinity; this.cd = 0; this.angle = 0;
+    <div id="market-window" class="side-window">
+        <div class="window-header" style="background: rgba(50, 0, 50, 0.3);">
+            <h2 class="window-title">资本运作中心</h2>
+            <button class="close-btn" onclick="toggleMarketWindow()">✕</button>
+        </div>
+        <div class="p-4 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-purple-900 scrollbar-track-black">
+            <div class="mb-6 bg-black/40 p-3 rounded border border-purple-900/30">
+                <div class="text-xs text-purple-300 mb-2 font-bold flex items-center gap-2">
+                    <span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
+                    市值走势 (VALUATION TREND)
+                </div>
+                <svg id="valuation-chart" viewBox="0 0 300 100"></svg>
+            </div>
+
+            <div class="mb-6">
+                <div class="text-xs text-[var(--market-purple)] font-bold border-b border-purple-900/50 pb-1 mb-3 flex justify-between">
+                    <span>全球市值排名 (GLOBAL RANK)</span>
+                    <span class="opacity-50">LIVE</span>
+                </div>
+                <div id="market-cap-leaderboard" class="flex flex-col gap-1">
+                    <!-- Leaderboard items will be injected here -->
+                </div>
+            </div>
+
+            <div class="text-xs text-[var(--market-purple)] font-bold border-b border-purple-900/50 pb-1 mb-3">并购目标 (M&A TARGETS)</div>
+            <div id="ma-list" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <div id="ops-window" class="side-window">
+        <div class="window-header" style="background: rgba(50, 0, 0, 0.3);">
+            <h2 class="window-title">秘密行动局</h2>
+            <button class="close-btn" onclick="toggleOpsWindow()">✕</button>
+        </div>
+        <div class="p-4 overflow-y-auto flex-1">
+            <div class="mb-4">
+                <div class="text-xs text-gray-500 mb-2">操作终端 (OPS TERMINAL)</div>
+                <div class="ops-console" id="ops-console">
+                    <div class="console-line">> SYSTEM INITIALIZED...</div>
+                    <div class="console-line">> WAITING FOR COMMAND...</div>
+                </div>
+            </div>
+            <div class="text-xs text-[var(--ops-red)] font-bold border-b border-gray-800 pb-1 mb-3">可用手段 (AVAILABLE TACTICS)</div>
+            <div id="ops-list" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <div id="placement-hint">
+        <h2 class="text-white border-none mb-0 text-xl">建立<span id="hint-type">总部</span></h2>
+        <p class="text-green-400 text-sm mt-2">请点击 <span id="hint-region-name" class="font-bold text-white">区域</span> 地图上的任意位置</p>
+    </div>
+
+    <div id="setup-overlay" class="overlay-panel" style="display: none;">
+        <div class="setup-panel">
+            <div class="corner-deco tl"></div><div class="corner-deco tr"></div>
+            <div class="corner-deco bl"></div><div class="corner-deco br"></div>
+            <div class="setup-sidebar border-r border-gray-800 p-8 bg-green-900/5">
+                <h2>初始化参数</h2>
+                <div class="input-group mb-5">
+                    <label class="block text-xs text-gray-500 mb-1">公司名称 / COMPANY NAME</label>
+                    <input type="text" id="company-name-input" placeholder="例如: CyberDyne Systems" maxlength="15">
+                </div>
+                <div class="input-group">
+                    <label class="block text-xs text-gray-500 mb-1">选择大区 / REGION</label>
+                    <div id="region-list"></div>
+                </div>
+                <div class="mt-5 text-xs text-gray-400 border-t border-gray-800 pt-3"><div id="region-desc">请选择一个起始大区...</div></div>
+            </div>
+            <div class="setup-main p-8 overflow-y-auto">
+                <h2>选择生态位 / ROLE</h2>
+                <p class="text-xs text-gray-500 mb-4">这决定了你的起步技术栈。</p>
+                <div class="chain-container flex flex-col gap-3">
+                    <div class="chain-card" onclick="selectRole('level0', this)"><div class="text-lg font-bold text-white">TIER 0: 源头设备</div><div class="text-xs text-gray-500 mt-1">制造光刻机。技术门槛极高，垄断地位。</div><div class="text-[10px] text-green-500 mt-1">对手: ASML</div></div>
+                    <div class="chain-card" onclick="selectRole('level1', this)"><div class="text-lg font-bold text-white">TIER 1: 晶圆代工</div><div class="text-xs text-gray-500 mt-1">超级工厂。资本密集，产能即正义。</div><div class="text-[10px] text-green-500 mt-1">对手: TSMC</div></div>
+                    <div class="chain-card" onclick="selectRole('level2', this)"><div class="text-lg font-bold text-white">TIER 2: 核心架构</div><div class="text-xs text-gray-500 mt-1">设计芯片。高利润，研发竞争激烈。</div><div class="text-[10px] text-green-500 mt-1">对手: NVIDIA</div></div>
+                    <div class="chain-card" onclick="selectRole('level3', this)"><div class="text-lg font-bold text-white">TIER 3: 终端平台</div><div class="text-xs text-gray-500 mt-1">面向消费者。现金流之王。</div><div class="text-[10px] text-green-500 mt-1">对手: Apple</div></div>
+                </div>
+                <button id="start-btn" onclick="enterPlacementMode()">初始化并选址 / DEPLOY</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="absolute inset-0 flex items-center justify-center z-50 bg-black">
+        <div class="text-xl tracking-[0.5em] text-[var(--primary-green)] animate-pulse">
+            LOADING_GEO_DATA...
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+    <div id="map-container"></div>
+
+    <script>
+    // =================== 游戏数据结构 ===================
+    const gameState = {
+        player: { name: "", region: "", role: "", coords: null, cash: 200.0, valuation: 0 }, 
+        branches: [], // {role, coords, regionName}
+        step: 'setup',
+        currentTabRole: 'level0',
+        techTabRole: 'level0',
+        intelTabRole: 'level0',
+        placingBranch: null,
+        tech: {},
+        selectedTechNode: null,
+        selectedCompetitor: null, 
+        marketData: {},
+        products: {},
+        date: { year: 2030, month: 1 },
+        valuationHistory: { player: [], level0:[], level1:[], level2:[], level3:[] },
+        newsLog: [] // 最新新闻列表
+    };
+
+    // 区域加成配置 (Bonus)
+    const regionBonuses = {
+        "North America": { costFactor: 1.0, rdFactor: 0.8, compBoost: 1.1, label: "硅谷红利: 研发费用-20%, 竞争力+10%" },
+        "Asia": { costFactor: 0.8, rdFactor: 1.1, compBoost: 1.0, label: "制造中心: 生产成本-20%" },
+        "Europe": { costFactor: 1.1, rdFactor: 0.9, compBoost: 1.05, label: "精密工程: 研发费用-10%, 竞争力+5%" },
+        "South America": { costFactor: 0.9, rdFactor: 1.2, compBoost: 0.9, label: "新兴市场: 成本-10%, 研发+20%" },
+        "Oceania": { costFactor: 1.2, rdFactor: 1.0, compBoost: 1.0, label: "孤立市场: 无特殊加成" },
+        "Africa": { costFactor: 0.7, rdFactor: 1.5, compBoost: 0.8, label: "未开发地: 成本-30%, 研发+50%" },
+        "Antarctica": { costFactor: 2.0, rdFactor: 2.0, compBoost: 0.5, label: "极地科研: 成本极高" }
+    };
+
+    // 产业链配置 - 深度专业化重写
+    const tierConfig = {
+        'level0': {
+            name: "Tier 0: 核心设备", short: "光刻/设备", specs: ["光学分辨率", "晶圆吞吐量", "套刻精度"],
+            initialMarket: 120,
+            topComp: { name: "ASML", share: 85, flagship: "High-NA EUV", specs: [95, 90, 90], score: 98, acquired: false },
+            avgComp: { name: "行业平均", flagship: "DUV Immersion", specs: [40, 50, 60], score: 45 },
+            unlockCost: 5000, baseCost: 500, defaultPrice: 2000,
+            techTree: [
+                {name:"极紫外光刻光学",nodes:["ArF 浸没式","EUV 反射镜","High-NA 物镜","变形光学系统"],costs:[0,2000,5000,10000],descs:["利用 193nm 激光穿过超纯水介质，将折射率提升至 1.44，突破干式光刻极限，是进入纳米制程的关键门槛。","由 40+ 层钼/硅纳米薄膜构成的布拉格反射器，在真空中以 70% 效率反射 13.5nm 极紫外光，是摩尔定律延续的心脏。","0.55 数值孔径的变形光路设计，将光子聚焦能力提升至埃米级，专为 2nm 及以下制程节点打造的终极光学引擎。","双向不同放大倍率的光学系统，克服掩模版尺寸限制，大幅提升晶圆曝光场的有效利用率，将产出效率推向理论极限。"]},
+                {name:"超精密工件台",nodes:["气浮导轨","双台同步系统","磁悬浮平面电机","原子级定位"],costs:[0,1500,4000,8000],descs:["传统气浮隔振技术，有效隔离地面微震动，为早期的纳米级光刻提供基础的稳定性保障。","革命性的双工件台架构，实现晶圆曝光与测量并行处理，将光刻机吞吐量（WPH）提升 100%，是量产效益的关键。","六自由度洛伦兹力驱动，消除机械摩擦与迟滞，实现无接触式的超高速、超平稳运动控制。","结合激光干涉仪与光栅尺的混合测量系统，实现皮米（pm）级别的套刻精度，确保数百层电路完美对准。"]},
+                {name:"纳米级环境控制",nodes:["Class-1 洁净室","氢气自由基清洗","EUV 真空腔体","智能温控补偿"],costs:[0,1000,3000,6000],descs:["ISO 一级洁净度标准，确保每立方英尺空气中 0.5 微米以上的尘埃颗粒不超过 1 个，杜绝微粒污染良率。","原位产生氢气自由基，持续清除反射镜表面因极紫外光照射而沉积的碳污染，延长昂贵光学元件的寿命。","维持 10^-9 mbar 的超高真空环境，防止极紫外光被空气分子吸收，确保宝贵的光子能量能到达晶圆。","基于大数据的实时热模型，毫秒级动态补偿因高能光束照射导致的光学元件热膨胀，消除热漂移误差。"]}
+            ],
+            calcCost: (v1,v2,v3)=>500+Math.pow(v1,1.8)*0.5+v2*5+v3*3,
+            up: null, down: 'level1'
+        },
+        'level1': {
+            name: "Tier 1: 晶圆制造", short: "晶圆/代工", specs: ["晶体管密度", "良率控制", "交付周期"],
+            initialMarket: 150,
+            topComp: { name: "TSMC", share: 55, flagship: "N2 Process", specs: [92, 95, 85], score: 95, acquired: false },
+            avgComp: { name: "行业平均", flagship: "28nm Planar", specs: [30, 80, 50], score: 50 },
+            unlockCost: 10000, baseCost: 300, defaultPrice: 1000,
+            techTree: [
+                {name:"晶体管微缩架构",nodes:["FinFET","GAAFET","CFET 互补场","2D 材料沟道"],costs:[0,3000,8000,15000],descs:["鳍式场效应晶体管。通过将栅极立体化，三面包裹沟道，极大增加了栅极控制面积，有效抑制短沟道效应，是 14nm 至 3nm 的主流架构。","全环绕栅极 (Gate-All-Around)。利用纳米片 (Nanosheet) 结构，实现栅极对沟道的四面包裹，提供近乎完美的静电控制，开启 2nm 时代。","互补场效应晶体管。将 NMOS 和 PMOS 垂直堆叠，在不缩小栅极间距的情况下，使晶体管密度直接翻倍，是 1nm 节点的必经之路。","采用二硫化钼或石墨烯作为沟道材料，利用其原子级厚度和超高电子迁移率，彻底消除短沟道效应，逼近物理极限。"]},
+                {name:"良率检测系统",nodes:["明场光学检测","E-Beam 电子束","AI 缺陷分类","在线量测 (OCM)"],costs:[0,1500,4000,7000],descs:["利用广谱光源进行高速扫描，快速发现晶圆表面的颗粒与图案缺陷，是产线最基础的“眼睛”。","利用高能电子束进行扫描，能够检测出光学手段无法看见的电压衬度缺陷（如开路/短路），精度极高但速度较慢。","基于深度学习的图像识别模型，自动对海量缺陷图片进行分类（如划痕、桥接、空洞），大幅缩短良率分析周期。","将量测设备直接集成到工艺机台内部，实现沉积/刻蚀厚度的实时闭环控制，将工艺偏差扼杀在发生瞬间。"]},
+                {name:"晶圆传输自动化",nodes:["OHT 天车系统","FOUP 自动化","N2 Purge","全无人暗灯工厂"],costs:[0,2000,5000,9000],descs:["空中走行式无人搬运车系统，在庞大的 Fab 厂房内建立高速物流网络，确保晶圆在机台间最高效流转。","前开式晶圆统一片盒的自动装卸接口，杜绝人工操作带来的震动与污染风险，实现机台与物流系统的无缝对接。","在晶圆盒与机台接口处充入高纯氮气，防止晶圆在等待加工期间与空气中的氧气/水分反应，保护铜互连层。","通过数字孪生与 AI 调度，实现 24/7 不间断生产的“黑灯工厂”，人类仅在控制中心进行远程监控与决策。"]}
+            ],
+            calcCost: (v1,v2,v3)=>Math.max(100,300+Math.pow(v1,1.5)*0.8-(v2-50)*2+v3*2),
+            up: 'level0', down: 'level2'
+        },
+        'level2': {
+            name: "Tier 2: 芯片设计", short: "架构/IC设计", specs: ["FP32 算力", "能效比 (TOPS/W)", "软件生态"],
+            initialMarket: 500,
+            topComp: { name: "NVIDIA", share: 80, flagship: "B200 Blackwell", specs: [98, 85, 90], score: 99, acquired: false },
+            avgComp: { name: "行业平均", flagship: "Generic x86/ARM", specs: [40, 50, 70], score: 55 },
+            unlockCost: 8000, baseCost: 100, defaultPrice: 800,
+            techTree: [
+                {name:"微架构设计",nodes:["超标量流水线","张量核心 (Tensor)","稀疏计算引擎","存算一体"],costs:[0,2500,6000,12000],descs:["通过增加发射端口和重排序缓冲区，实现每个时钟周期执行多条指令，挖掘指令级并行度，提升单核通用性能。","专为深度学习设计的矩阵乘法加速单元，单周期可完成 64x64 混合精度矩阵运算，是大模型训练的算力基石。","利用神经网络的稀疏性，自动跳过零值计算，在不损失精度的情况下，将推理速度和能效提升 2 倍以上。","打破冯诺依曼架构瓶颈，在存储单元内部直接进行逻辑运算，彻底消除数据搬运带来的功耗与延迟，实现能效的量子级跃迁。"]},
+                {name:"先进封装互连",nodes:["MCM 多芯片","CoWoS 2.5D","Hybrid Bonding","硅光子互连"],costs:[0,2000,5000,10000],descs:["在同一基板上集成多个裸片，缩短互连长度，是早期的异构集成方案，有效降低系统成本。","利用硅中介层 (Interposer) 提供高密度微凸块互连，将 HBM 显存与 GPU 核心紧密集成，突破内存带宽墙。","无凸块混合键合技术，利用铜-铜直接扩散连接，实现微米级垂直互连间距，是真正的 3D IC 堆叠技术。","将电信号转换为光信号进行片间通讯，彻底突破铜互连的带宽与功耗物理极限，实现数据中心级的超高速互连。"]},
+                {name:"异构计算生态",nodes:["编译器优化","统一内存架构","并行计算库","AGI 自进化"],costs:[0,1500,4000,8000],descs:["底层指令集转译与自动向量化，让代码能高效运行在不同架构的计算单元上，降低开发者的移植门槛。","CPU 与 GPU 共享同一物理内存空间，实现零拷贝数据访问，大幅简化异构编程模型，提升大模型推理效率。","提供涵盖数学、图像、AI 等领域的全套加速库 (如 CUDA/ROCm)，构建难以逾越的软件护城河。","AI 开始辅助甚至主导芯片设计与代码编写，形成自我迭代、自我优化的指数级进化闭环。"]}
+            ],
+            calcCost: (v1,v2,v3)=>100+(v1*v2)/150+v3*4,
+            up: 'level1', down: 'level3'
+        },
+        'level3': {
+            name: "Tier 3: 终端平台", short: "消费/平台", specs: ["用户体验", "硬件耐久度", "生态闭环"],
+            initialMarket: 3000,
+            topComp: { name: "Apple", share: 25, flagship: "iPhone 17 Pro", specs: [90, 95, 95], score: 97, acquired: false },
+            avgComp: { name: "行业平均", flagship: "Commodity Device", specs: [50, 50, 40], score: 50 },
+            unlockCost: 6000, baseCost: 200, defaultPrice: 1200,
+            techTree: [
+                {name:"人机交互界面",nodes:["多点触控","空间计算","肌电感应","非侵入脑机"],costs:[0,3000,7000,14000],descs:["投射式电容触摸技术，开启了智能手机时代，让手指成为最自然的交互工具。","结合眼动追踪与手势识别的 XR 交互，将数字信息无缝叠加于物理世界，重新定义空间与计算的关系。","通过腕带传感器捕捉微弱的神经电信号，实现意念控制般的隔空微手势操作，连接虚拟与现实的神经桥梁。","利用高灵敏度光泵磁力计或超声波，直接读取皮层脑电波，实现“想即所得”的终极人机融合。"]},
+                {name:"工业设计材料",nodes:["航空铝材","钛金属边框","纳米微晶玻璃","液态金属机身"],costs:[0,1500,3000,6000],descs:["6000/7000 系铝合金，经 CNC 精密加工与阳极氧化，兼顾轻量化与强度，是现代电子产品的标准骨架。","航天级钛合金，拥有极高的强度重量比和耐腐蚀性，赋予设备奢华质感与极致耐用性。","在玻璃基质中生长纳米级陶瓷晶体，使其具备陶瓷的硬度与玻璃的透光性，抗摔性能提升 4 倍。","非晶态合金，采用注塑成型工艺，拥有类似液体的原子结构，具备超高弹性和完美的镜面光泽。"]},
+                {name:"生态闭环整合",nodes:["应用商店分发","云端连续互通","设备端侧 AI","蜂群思维网络"],costs:[0,2500,6000,11000],descs:["建立严格审核的软件分发平台，确保应用质量与安全性，同时坐收 30% 的“过路费”，是生态盈利的核心。","实现跨设备剪贴板、通话接力、文档实时同步，让用户被无缝的便利性“锁死”在生态围墙之内。","在设备本地运行隐私保护的大模型，实现个性化智能助理与实时计算摄影，不依赖网络即可提供核心智能。","万物互联的终极形态，所有设备共享算力与感知数据，形成一个分布式的超级智能体，服务于单一用户。"]}
+            ],
+            calcCost: (v1,v2,v3)=>200+v1*3+v2*2+Math.pow(v3,1.6)*0.4,
+            up: 'level2', down: null
+        }
+    };
+
+    const regionsData = {
+        "North America": { diff: "Normal", label: "北美", class:"text-green-400", desc: "拥有最顶尖的 IP 储备与资本流动性，但研发人力成本极高。" },
+        "Asia": { diff: "Hard", label: "泛亚细亚", class:"text-red-400", desc: "全球半导体制造心脏，供应链极其完善，但地缘政治风险极高。" },
+        "Europe": { diff: "Medium", label: "欧罗巴", class:"text-yellow-400", desc: "光刻机与精密设备的摇篮，反垄断法规极为严格。" },
+        "South America": { diff: "Hard", label: "南美洲", class:"text-red-400", desc: "新兴市场，原材料丰富但基础设施薄弱。" },
+        "Oceania": { diff: "Hard", label: "大洋洲", class:"text-yellow-400", desc: "偏安一隅，适合作为隐蔽的数据中心节点。" },
+        "Africa": { diff: "Extreme", label: "非洲", class:"text-red-500", desc: "未开发的处女地，几乎没有现成的供应链支持。" }
+    };
+
+    // 初始对手
+    const techCompanies = [
+        { name: "Apple", coords: [-122.03, 37.32], type: "Platform", id: "Apple", role: "level3" },
+        { name: "NVIDIA", coords: [-121.95, 37.35], type: "Architect", id: "NVIDIA", role: "level2" },
+        { name: "TSMC", coords: [120.96, 24.81], type: "Foundry", id: "TSMC", role: "level1" },
+        { name: "ASML", coords: [5.40, 51.41], type: "Equipment", id: "ASML", role: "level0" }
+    ];
+
+    // 旧的 newsItems 不再用作循环播报，只保留文字素材
+    const newsItems = ["台积电 2nm 良率提升", "北美算力需求激增", "海底光缆信号异常", "欧盟启动反垄断调查", "量子计算原型机测试"];
+
+    // =================== 秘密行动数据 - 专业化重写 ===================
+    const opsDatabase = [
+        { 
+            id: "sabotage", name: "破坏超纯水系统", type: "rival", cost: 2000, chance: 0.7,
+            desc: "针对同级对手 Fab。污染其生产线关键的超纯水供应，导致大规模晶圆报废与停产。"
+        },
+        { 
+            id: "poach", name: "猎头专项基金", type: "rival", cost: 5000, chance: 0.6,
+            desc: "针对同级对手。定向挖角其首席架构师及核心工艺团队，直接获取技术秘密。"
+        },
+        { 
+            id: "cut_supply", name: "关键材料断供", type: "downstream", cost: 3000, chance: 0.8,
+            desc: "针对下游客户。切断光刻胶或特种气体的供应，迫使其生产线瘫痪，缩减其市场。"
+        },
+        { 
+            id: "backdoor", name: "植入硬件木马", type: "downstream", cost: 8000, chance: 0.4,
+            desc: "针对下游客户。在底层 RTL 代码中植入逻辑炸弹，为未来窃取数据或远程锁死做准备。"
+        },
+        { 
+            id: "cancel_order", name: "恶意砍单", type: "upstream", cost: 1000, chance: 0.9,
+            desc: "针对上游供应商。在季度末突然取消巨额晶圆订单，制造其库存积压危机，压低采购价。"
+        },
+        { 
+            id: "patent_troll", name: "IP核侵权诉讼", type: "upstream", cost: 4000, chance: 0.5,
+            desc: "针对上游供应商。利用过期的基础专利发起全球禁售令申请，拖慢其新技术迭代节奏。"
+        }
+    ];
+
+    // =================== 新闻系统：统一入口 ===================
+    function pushNews(message) {
+        if (!gameState.newsLog) gameState.newsLog = [];
+        gameState.newsLog.unshift(message);
+        if (gameState.newsLog.length > 8) gameState.newsLog.pop();
+        
+        const newsContent = document.getElementById('news-content');
+        if (newsContent) {
+            // Reset animation safely to prevent jumping
+            newsContent.classList.remove('scrolling');
+            // Force reflow
+            void newsContent.offsetWidth;
+            newsContent.innerHTML = gameState.newsLog.join(" &nbsp;///&nbsp; ");
+            newsContent.classList.add('scrolling');
+        }
     }
 
-    update() {
-        if (this.weapon === 'minigun' && INPUT.down && this.ammo > 0) this.speed = this.baseSpeed * 0.5;
-        else this.speed = this.baseSpeed;
+    // =================== 随机世界事件 - 专业化重写 ===================
+    function worldEventAiBoom() {
+        const role = 'level2';
+        const data = gameState.marketData[role];
+        if (!data) return null;
+        data.marketSize *= 1.1;
+        return `生成式 AI 浪潮：大模型参数量指数级增长，${tierConfig[role].name} 算力缺口扩大，TAM 暴涨 10%。`;
+    }
 
-        let dx = 0, dy = 0;
-        if (KEYS['w']) dy -= 1; if (KEYS['s']) dy += 1; if (KEYS['a']) dx -= 1; if (KEYS['d']) dx += 1;
+    function worldEventRecession() {
+        const roles = ['level0','level1','level2','level3'];
+        const role = roles[Math.floor(Math.random()*roles.length)];
+        const data = gameState.marketData[role];
+        if (!data) return null;
+        data.marketSize *= 0.93;
+        return `加息周期：全球消费电子需求疲软，${tierConfig[role].name} 步入去库存阶段，规模萎缩 7%。`;
+    }
 
-        if (dx !== 0 || dy !== 0) {
-            const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-            const moveX = dx * this.speed; const moveY = dy * this.speed;
-            if (!this.checkCol(this.x + moveX, this.y)) this.x += moveX;
-            if (!this.checkCol(this.x, this.y + moveY)) this.y += moveY;
+    function worldEventPlayerBreakthrough() {
+        const roles = Object.keys(gameState.tech).filter(r => gameState.tech[r].unlocked);
+        if (roles.length === 0) return null;
+        const role = roles[Math.floor(Math.random()*roles.length)];
+        const data = gameState.marketData[role];
+        if (!data) return null;
+        if (!data.targets) data.targets = { player: data.shares.player || 0 };
+        const gain = 5;
+        data.targets.player = Math.min(95, (data.targets.player || data.shares.player) + gain);
+        data.margin = Math.min(0.9, (data.margin || 0) + 0.03);
+        return `技术突破：${gameState.player.name} 在 ${tierConfig[role].name} 实现关键节点良率爬坡，目标份额 +${gain}pt。`;
+    }
+
+    function worldEventCompetitorScandal() {
+        const roles = ['level0','level1','level2','level3'].filter(r => !tierConfig[r].topComp.acquired);
+        if (roles.length === 0) return null;
+        const role = roles[Math.floor(Math.random()*roles.length)];
+        const conf = tierConfig[role];
+        const comp = conf.topComp;
+        const beforeShare = comp.share;
+        comp.share = Math.max(5, comp.share - 4);
+        const delta = beforeShare - comp.share;
+        const beforeScore = comp.score;
+        comp.score = Math.max(20, comp.score - 6);
+        return `数据泄露丑闻：${comp.name} 在 ${conf.name} 的核心 IP 遭黑客窃取，客户信任度下降，份额 -${delta.toFixed(1)}pt。`;
+    }
+
+    function worldEventRegulationPlayer() {
+        const roles = Object.keys(gameState.tech).filter(r => gameState.tech[r].unlocked);
+        if (roles.length === 0) return null;
+        const role = roles[Math.floor(Math.random()*roles.length)];
+        const data = gameState.marketData[role];
+        if (!data) return null;
+        if (!data.targets) data.targets = { player: data.shares.player || 0 };
+        const loss = 4;
+        data.targets.player = Math.max(0, (data.targets.player || data.shares.player) - loss);
+        data.margin = Math.max(0, (data.margin || 0) - 0.03);
+        return `反垄断审查：${gameState.player.name} 在 ${tierConfig[role].name} 面临地缘政治合规调查，份额被迫出让 ${loss}pt。`;
+    }
+
+    function worldEventSupplyShock() {
+        const role = 'level1';
+        const data = gameState.marketData[role];
+        if (!data) return null;
+        data.marketSize *= 0.97;
+        const beforeShare = tierConfig[role].topComp.share;
+        tierConfig[role].topComp.share = Math.max(5, tierConfig[role].topComp.share - 2);
+        const delta = beforeShare - tierConfig[role].topComp.share;
+        return `不可抗力：地震导致 ${tierConfig[role].name} 主要 Fab 停工，全球晶圆产能紧缺，龙头份额 -${delta.toFixed(1)}pt。`;
+    }
+
+    const worldEventPool = [
+        worldEventAiBoom,
+        worldEventRecession,
+        worldEventPlayerBreakthrough,
+        worldEventCompetitorScandal,
+        worldEventRegulationPlayer,
+        worldEventSupplyShock
+    ];
+
+    function triggerWorldEvent() {
+        if (gameState.step !== 'playing') return;
+        if (!gameState.marketData.level0) return;
+        const fn = worldEventPool[Math.floor(Math.random()*worldEventPool.length)];
+        const msg = fn();
+        if (msg) pushNews(msg);
+    }
+
+    function initGameUI() {
+        document.getElementById('start-screen').style.opacity = 0;
+        setTimeout(() => {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('setup-overlay').style.display = 'flex';
+        }, 800);
+    }
+
+    // =================== 游戏循环 & 经济 ===================
+    function startGame(coords) {
+        gameState.step = 'playing';
+        gameState.player.coords = coords;
+        const rName = gameState.player.region;
+        gameState.branches.push({ role: gameState.player.role, coords: coords, regionName: rName });
+
+        document.getElementById('placement-hint').style.display = 'none';
+        document.body.classList.remove('placement-mode');
+        
+        drawMapObjects();
+        document.querySelector('.game-ui').classList.add('active');
+        
+        document.getElementById('hud-company-name').innerText = gameState.player.name.toUpperCase();
+        document.getElementById('hud-sector').innerText = tierConfig[gameState.player.role].short;
+        document.getElementById('hud-region').innerText = rName.toUpperCase();
+        updateCashDisplay();
+
+        gameState.newsLog = [];
+        pushNews("系统上线：全球半导体市场情报链路已接通。");
+        
+        // Initial kick to start animation
+        const newsEl = document.getElementById('news-content');
+        if(newsEl) newsEl.classList.add('scrolling');
+
+        ['level0', 'level1', 'level2', 'level3'].forEach(role => {
+            const topComp = tierConfig[role].topComp;
+            gameState.marketData[role] = {
+                marketSize: tierConfig[role].initialMarket,
+                shares: { player: 0, top: topComp.share, avg: 100 - topComp.share },
+                targets: { player: 0 },
+                margin: 0 
+            };
+        });
+
+        generateTabs(); 
+        updateMapStyles();
+
+        setInterval(gameTick, 1000);
+    }
+
+    function gameTick() {
+        if (gameState.step !== 'playing') return;
+
+        gameState.date.month++;
+        if (gameState.date.month > 12) { gameState.date.month = 1; gameState.date.year++; }
+        document.getElementById('date-display').innerText = `${gameState.date.year}-${String(gameState.date.month).padStart(2,'0')}`;
+
+        let totalProfit = 0;
+        gameState.player.valuation = 0;
+
+        ['level0', 'level1', 'level2', 'level3'].forEach(role => {
+            const data = gameState.marketData[role];
+            const config = tierConfig[role];
+            if (!data) return;
+
+            data.marketSize *= 1.002;
+            if (!Number.isFinite(data.marketSize) || data.marketSize < 1) data.marketSize = 1;
+
+            if (!Number.isFinite(data.margin)) data.margin = 0;
+            data.margin = Math.max(-0.5, Math.min(0.95, data.margin));
+
+            const target = (data.targets && typeof data.targets.player === 'number') ? data.targets.player : 0;
+            data.shares.player += (target - data.shares.player) * 0.05;
+
+            if (data.shares.player < 0) data.shares.player = 0;
+            if (data.shares.player > 100) data.shares.player = 100;
+
+            let remaining = 100 - data.shares.player;
+            if (remaining < 0) remaining = 0;
+            
+            if (config.topComp.acquired) {
+                data.shares.top = 0;
+                data.shares.avg = remaining;
+            } else {
+                const initialTop = config.topComp.share;
+                const initialAvg = 100 - initialTop;
+                const ratio = (initialTop + initialAvg) > 0 ? initialTop / (initialTop + initialAvg) : 0.5;
+                
+                data.shares.top = remaining * ratio;
+                data.shares.avg = remaining * (1 - ratio);
+            }
+
+            const revenue = data.marketSize * (data.shares.player / 100);
+            const profit = revenue * data.margin;
+            if (Number.isFinite(profit)) {
+                totalProfit += profit;
+            }
+
+            const baseTopVal = data.marketSize * (data.shares.top / 100) * 5;
+            const noiseTop = 1 + (Math.random() - 0.5) * 0.06; 
+            gameState.valuationHistory[role].push(baseTopVal * noiseTop);
+
+            gameState.player.valuation += revenue * 5;
+        });
+
+        if (!Number.isFinite(totalProfit)) totalProfit = 0;
+
+        const playerNoise = 1 + (Math.random() - 0.5) * 0.06; 
+        gameState.player.valuation *= playerNoise;
+        if (!Number.isFinite(gameState.player.valuation) || gameState.player.valuation < 0) {
+            gameState.player.valuation = 0;
+        }
+        gameState.valuationHistory.player.push(gameState.player.valuation);
+
+        for (let key in gameState.valuationHistory) {
+            if (gameState.valuationHistory[key].length > 20) gameState.valuationHistory[key].shift();
         }
 
-        this.x = Math.max(this.radius, Math.min(WORLD_W - this.radius, this.x));
-        this.y = Math.max(this.radius, Math.min(WORLD_H - this.radius, this.y));
-        this.angle = Math.atan2((INPUT.y + camera.y) - this.y, (INPUT.x + camera.x) - this.x);
+        gameState.player.cash += totalProfit;
+        if (!Number.isFinite(gameState.player.cash) || gameState.player.cash < 0) {
+            gameState.player.cash = 0;
+        }
+        // 简单上限，防止数字过大溢出显示
+        if (gameState.player.cash > 999999999) {
+            gameState.player.cash = 999999999;
+        }
+        updateCashDisplay(totalProfit);
 
-        if (this.cd > 0) this.cd--;
-        if (frame % 120 === 0 && this.shield < 50) this.shield = Math.min(50, this.shield + 1);
+        // 随机世界事件概率调整：0.016 约等于 1/60，即每分钟一次
+        if (Math.random() < 0.016) {
+            triggerWorldEvent();
+        }
+
+        if (document.getElementById('intel-window').classList.contains('open')) renderIntelContent(gameState.intelTabRole);
+        if (document.getElementById('market-window').classList.contains('open')) renderMarketContent();
     }
 
-    checkCol(x, y) {
-        const r = { x: x - this.radius, y: y - this.radius, w: this.radius*2, h: this.radius*2 };
-        return walls.some(w => checkRectOverlap(r, w));
+    function getRegionBonus(role) {
+        const branch = gameState.branches.find(b => b.role === role);
+        if (!branch) return { costFactor: 1, rdFactor: 1, compBoost: 1 };
+        return regionBonuses[branch.regionName] || { costFactor: 1, rdFactor: 1, compBoost: 1 };
     }
 
-    draw() {
-        ctx.save(); ctx.translate(this.x - camera.x, this.y - camera.y); ctx.rotate(this.angle);
-        ctx.fillStyle = WEAPONS[this.weapon].color;
-        if (this.weapon === 'minigun') { ctx.fillRect(0, -6, this.radius + 18, 12); ctx.fillStyle = '#000'; ctx.fillRect(this.radius + 18, -6, 4, 12); } 
-        else if (this.weapon === 'rocket') { ctx.fillRect(0, -8, this.radius + 16, 16); } 
-        else { ctx.fillRect(0, -4, this.radius + 14, 8); }
-        ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 15; ctx.fill();
-        if (this.shield > 0) { ctx.beginPath(); ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2); ctx.strokeStyle = `rgba(100, 200, 255, ${this.shield/50})`; ctx.lineWidth = 2; ctx.stroke(); }
-        ctx.restore();
-    }
-}
-
-class Turret {
-    constructor(x, y) { 
-        this.x = x; this.y = y; 
-        this.radius = 15; this.angle = 0; this.cd = 0; 
-        this.target = null; 
-        this.health = 50; 
-        this.maxHealth = 50;
-    }
-    update() {
-        let minDist = 400; this.target = null;
-        for(let e of enemies) { const d = Math.hypot(e.x - this.x, e.y - this.y); if (d < minDist) { minDist = d; this.target = e; } }
-        if (this.target) {
-            this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-            if (this.cd <= 0) { projectiles.push(new Projectile(this.x, this.y, 4, '#fbbf24', {x: Math.cos(this.angle)*15, y: Math.sin(this.angle)*15}, 0.5)); this.cd = 15; SFX.play(800, 'triangle', 0.05, 0.05); }
-        } else { this.angle += 0.05; }
-        if (this.cd > 0) this.cd--;
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (dx < -50 || dx > canvas.width+50 || dy < -50 || dy > canvas.height+50) return;
+    function updateCashDisplay(profitPerSec) {
+        if (!Number.isFinite(gameState.player.cash) || gameState.player.cash < 0) {
+            gameState.player.cash = 0;
+        }
+        document.getElementById('cash-display').innerText = Math.floor(gameState.player.cash).toLocaleString();
         
-        ctx.save(); 
-        ctx.translate(dx, dy); 
-        
-        // HP Bar
-        const hpW = 24; const hpH = 4;
-        ctx.fillStyle = 'red'; ctx.fillRect(-hpW/2, -22, hpW, hpH);
-        ctx.fillStyle = '#0f0'; ctx.fillRect(-hpW/2, -22, hpW * (this.health/this.maxHealth), hpH);
-
-        // Body
-        ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0,0, 12, 0, Math.PI*2); ctx.fill();
-        
-        // Head
-        ctx.rotate(this.angle); 
-        ctx.fillStyle = '#fbbf24'; ctx.fillRect(-5, -5, 20, 10); ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill(); 
-        
-        ctx.restore();
-    }
-}
-
-class Projectile {
-    constructor(x, y, r, c, vel, dmg, type='normal', meta={}) {
-        this.x = x; this.y = y; this.r = r; this.color = c; this.vel = vel; this.dmg = dmg; this.type = type; this.meta = meta; this.life = 100; this.markedForDelete = false; this.bounces = 2;
-    }
-    update() {
-        const prevX = this.x; const prevY = this.y;
-        this.x += this.vel.x; this.y += this.vel.y; this.life--;
-        for (let w of walls) {
-            if (this.x > w.x && this.x < w.x + w.w && this.y > w.y && this.y < w.y + w.h) {
-                if (w.destructible) continue; 
-                if (this.type === 'bounce' && this.bounces > 0) {
-                    this.bounces--; this.x = prevX; this.y = prevY;
-                    if (this.x + this.vel.x > w.x && this.x + this.vel.x < w.x + w.w) this.vel.y = -this.vel.y; else this.vel.x = -this.vel.x;
-                    createParticles(this.x, this.y, this.color, 2, 1); return;
-                }
-                this.explode(); 
-                break;
+        if (profitPerSec !== undefined) {
+            const el = document.getElementById('profit-display');
+            const val = profitPerSec.toFixed(1);
+            if (profitPerSec >= 0) {
+                el.innerText = `+${val} B / month`;
+                el.className = "text-[10px] text-green-500";
+            } else {
+                el.innerText = `${val} B / month`;
+                el.className = "text-[10px] text-red-500";
             }
         }
-        if (this.life <= 0) this.markedForDelete = true;
     }
-    explode() {
-        this.markedForDelete = true;
-        if (this.type === 'rocket') { SFX.explode(); createParticles(this.x, this.y, '#f97316', 20, 5); particles.push({x: this.x, y: this.y, life: 20, maxLife: 20, type: 'shockwave', r: this.meta.radius}); enemies.forEach(e => { if (Math.hypot(e.x - this.x, e.y - this.y) < this.meta.radius) e.takeDamage(this.dmg); }); } 
-        else { createParticles(this.x, this.y, this.color, 3, 2); }
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (this.type === 'rocket') { ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(dx, dy, 6, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx - this.vel.x*3, dy - this.vel.y*3); ctx.strokeStyle = 'rgba(255,100,0,0.5)'; ctx.lineWidth = 4; ctx.stroke(); } 
-        else if (this.type === 'bounce') { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = 'rgba(236, 72, 153, 0.5)'; ctx.beginPath(); ctx.arc(dx, dy, 8, 0, Math.PI*2); ctx.stroke(); } 
-        else { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(dx, dy, this.r, 0, Math.PI*2); ctx.fill(); }
-    }
-}
 
-// --- 敌方子弹类 ---
-class EnemyProjectile {
-    constructor(x, y, vel) {
-        this.x = x; this.y = y; this.vel = vel;
-        this.radius = 6; this.color = '#ff0055';
-        this.markedForDelete = false;
-    }
-    update() {
-        this.x += this.vel.x; this.y += this.vel.y;
-        for(let w of walls) {
-            if(this.x > w.x && this.x < w.x + w.w && this.y > w.y && this.y < w.y + w.h) {
-                this.markedForDelete = true;
-                createParticles(this.x, this.y, this.color, 3, 2);
-                if(w.destructible) w.health -= 10;
-                break;
-            }
-        }
-        if(Math.abs(this.x - player.x) > 1500 || Math.abs(this.y - player.y) > 1500) this.markedForDelete = true;
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        ctx.fillStyle = this.color; ctx.shadowBlur = 10; ctx.shadowColor = this.color;
-        ctx.beginPath(); ctx.arc(dx, dy, this.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
-    }
-}
-
-class Enemy {
-    constructor(x, y, type) {
-        this.x = x; this.y = y; this.type = type;
-        this.radius = type === 'boss' ? 50 : (type === 'tank' ? 26 : (type === 'speed' ? 12 : 18));
-        this.color = type === 'boss' ? '#ef4444' : (type === 'tank' ? '#a855f7' : (type === 'speed' ? '#fbbf24' : '#ef4444'));
-        this.speed = type === 'boss' ? 1.0 : (type === 'tank' ? 1.2 : (type === 'speed' ? 4.2 : 2.2));
-        this.hp = type === 'boss' ? 70 : (type === 'tank' ? 25 : (type === 'speed' ? 2 : 5));
-        this.maxHp = this.hp; 
-        this.flash = 0;
-        this.shootCd = 0;
-    }
-    takeDamage(amount) {
-        if (this.hp <= 0) return false;
-        this.hp -= amount; this.flash = 3;
-        if (this.hp <= 0) {
-            let pts = 10; let mats = 5; let creds = 5;
-            if(this.type === 'tank') { pts=50; mats=15; creds=25; }
-            if(this.type === 'boss') { pts=100; mats=200; creds=500; SFX.nuke(); showMsg("BOSS ELIMINATED", "text-green-500"); }
-            
-            score += pts; player.materials += mats; player.credits += creds;
-            updateUI();
-            createParticles(this.x, this.y, this.color, this.type==='boss'?50:10, 4);
-            
-            let dropChance = 0.15; 
-            if (this.type === 'tank') dropChance = 0.5;
-            if (this.type === 'boss') dropChance = 1.0;
-            
-            if(Math.random() < dropChance) spawnPickup(this.x, this.y);
+    function spendCash(amount) {
+        if (gameState.player.cash >= amount) {
+            gameState.player.cash -= amount;
+            if (gameState.player.cash < 0) gameState.player.cash = 0;
+            updateCashDisplay(); 
             return true;
         }
+        const display = document.getElementById('cash-display').parentElement;
+        display.style.border = "1px solid red";
+        setTimeout(() => display.style.border = "1px solid rgba(34, 197, 94, 0.3)", 200);
         return false;
     }
-    update() {
-        const dx = player.x - this.x; const dy = player.y - this.y; const d = Math.hypot(dx, dy);
+
+    function launchProduct() {
+        const role = gameState.currentTabRole;
+        const name = document.getElementById('product-name').value;
+        const score = parseInt(document.getElementById('calc-score').innerText);
+        const productPower = parseInt(document.getElementById('calc-power').innerText); 
+        const specs = [1,2,3].map(i => parseInt(document.getElementById(`slider-${i}`).value));
+        const marginPercent = parseInt(document.getElementById('calc-margin').innerText);
+
+        gameState.products[role] = { name, specs, score };
         
-        if (this.type === 'boss') {
-            this.shootCd--;
-            if (this.shootCd <= 0) {
-                const ang = Math.atan2(dy, dx);
-                const vel = { x: Math.cos(ang)*8, y: Math.sin(ang)*8 };
-                enemyProjectiles.push(new EnemyProjectile(this.x, this.y, vel));
-                SFX.play(200, 'sawtooth', 0.1, 0.1);
-                this.shootCd = 60;
-            }
-        }
-
-        let vx = (dx / d) * this.speed; let vy = (dy / d) * this.speed;
-        enemies.forEach(e => { if (e === this) return; const edx = this.x - e.x; const edy = this.y - e.y; const dist = Math.hypot(edx, edy); if (dist < this.radius * 2) { const push = (this.radius*2 - dist) / dist; vx += edx * push * 0.1; vy += edy * push * 0.1; } });
-        turrets.forEach(t => { const tdx = t.x - this.x; const tdy = t.y - this.y; if (Math.hypot(tdx, tdy) < 30) { t.health -= 1; if(t.health <=0) { turrets = turrets.filter(tr => tr !== t); createParticles(t.x, t.y, '#333', 10, 5); SFX.explode(); } } });
-        if (!this.checkCol(this.x + vx, this.y)) this.x += vx;
-        if (!this.checkCol(this.x, this.y + vy)) this.y += vy;
-        if (this.flash > 0) this.flash--;
-    }
-    checkCol(x, y) {
-        const r = {x: x-this.radius, y: y-this.radius, w:this.radius*2, h:this.radius*2};
-        for(let w of walls) { if (checkRectOverlap(r, w)) { if (w.destructible) { w.health -= 0.1; if (w.health <= 0) { walls = walls.filter(wall => wall !== w); createParticles(w.x + w.w/2, w.y + w.h/2, '#fbbf24', 5, 3); } } return true; } }
-        return false;
-    }
-    draw() {
-        const dx = this.x - camera.x; const dy = this.y - camera.y;
-        if (dx < -100 || dx > canvas.width+100 || dy < -100 || dy > canvas.height+100) return;
-        ctx.save(); ctx.translate(dx, dy); 
+        const cap = productPower; 
+        const efficiency = score / 100; 
+        const targetShare = cap * efficiency;
         
-        if (this.type === 'boss') {
-            const hpW = 60; const hpH = 6;
-            ctx.fillStyle = 'black'; ctx.fillRect(-hpW/2, -this.radius-15, hpW, hpH);
-            ctx.fillStyle = 'red'; ctx.fillRect(-hpW/2, -this.radius-15, hpW*(this.hp/this.maxHp), hpH);
+        if (gameState.marketData[role] && gameState.marketData[role].targets) {
+            gameState.marketData[role].targets.player = Math.min(95, Math.max(0, targetShare));
         }
+        gameState.marketData[role].margin = marginPercent / 100;
 
-        ctx.rotate(Math.atan2(player.y - this.y, player.x - this.x));
-        ctx.fillStyle = this.flash > 0 ? 'white' : this.color; ctx.shadowBlur = 10; ctx.shadowColor = this.color;
+        const btn = document.getElementById('launch-btn');
+        const originalText = btn.innerText;
+        btn.innerText = "发布成功 / RELEASED!";
+        btn.classList.add('bg-white', 'text-black');
         
-        if (this.type === 'boss') {
-            ctx.beginPath(); ctx.moveTo(this.radius, 0);
-            for (let i = 1; i < 5; i++) { ctx.lineTo(this.radius * Math.cos(i * 2 * Math.PI / 5), this.radius * Math.sin(i * 2 * Math.PI / 5)); }
-            ctx.closePath(); ctx.fill();
-        } else if (this.type === 'tank') { ctx.fillRect(-this.radius, -this.radius, this.radius*2, this.radius*2); }
-        else if (this.type === 'speed') { ctx.beginPath(); ctx.moveTo(this.radius,0); ctx.lineTo(-this.radius, -this.radius); ctx.lineTo(-this.radius, this.radius); ctx.fill(); }
-        else { ctx.beginPath(); ctx.arc(0,0,this.radius,0,Math.PI*2); ctx.fill(); }
-        ctx.restore();
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.classList.remove('bg-white', 'text-black');
+            toggleProductWindow();
+            pushNews(`<span class="text-white font-bold">新品发布: ${gameState.player.name} 推出了 ${name}! 目标份额: ${targetShare.toFixed(1)}%</span>`);
+        }, 1000);
     }
-}
 
-function checkRectOverlap(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
-
-function createParticles(x, y, color, count, speed) {
-    for(let i=0; i<count; i++) { 
-        const angle = Math.random() * Math.PI * 2; 
-        const s = Math.random() * speed; 
-        particles.push({ x: x, y: y, vx: Math.cos(angle)*s, vy: Math.sin(angle)*s, life: 1.0, color: color, type: 'normal' }); 
-    }
-}
-
-function spawnPickup(x, y) {
-    if (x === undefined) x = Math.random() * (WORLD_W - 200) + 100;
-    if (y === undefined) y = Math.random() * (WORLD_H - 200) + 100;
-    const w = Math.random();
-    let type = 'ammo';
-    if (w > 0.98) type = 'nuke';
-    else if (w > 0.90) type = 'minigun';
-    else if (w > 0.80) type = 'turret'; 
-    else if (w > 0.75) type = 'bouncer';
-    else if (w > 0.70) type = 'laser';
-    else if (w > 0.65) type = 'rocket';
-    else if (w > 0.55) type = 'shield';
-    else if (w > 0.45) type = 'health';
-    else if (w > 0.25) type = 'shotgun';
-    else if (w > 0.10) type = 'rifle';
-    
-    pickups.push({ x: x, y: y, type: type, bob: 0 });
-}
-
-function triggerNuke() {
-    SFX.nuke();
-    const flash = document.getElementById('flash-layer'); flash.style.opacity = 1; setTimeout(() => flash.style.opacity = 0, 1000);
-    enemies.forEach(e => { if (e.type !== 'tank' && e.type !== 'boss') { e.hp = 0; createParticles(e.x, e.y, e.color, 10, 5); } else { e.takeDamage(50); } });
-    let kills = enemies.filter(e => e.hp <= 0).length; score += kills * 20; updateUI();
-    showMsg("TACTICAL NUKE DETONATED", "text-red-600");
-}
-
-function updateUI() {
-    document.getElementById('scoreEl').innerText = score;
-    document.getElementById('materialEl').innerText = Math.floor(player.materials);
-    document.getElementById('creditsEl').innerText = Math.floor(player.credits);
-    document.getElementById('shopCredits').innerText = Math.floor(player.credits);
-    
-    document.getElementById('healthBar').style.width = `${player.health}%`;
-    document.getElementById('shieldBar').style.width = `${player.shield}%`;
-    document.getElementById('healthText').innerText = Math.ceil(player.health) + "%";
-    const wData = WEAPONS[player.weapon];
-    document.getElementById('weaponName').innerText = wData.name;
-    document.getElementById('weaponName').style.color = wData.color;
-    document.getElementById('ammoEl').innerText = player.ammo === Infinity ? '∞' : player.ammo;
-    document.getElementById('turretCount').innerText = player.turretCount;
-    document.getElementById('turretStatus').style.opacity = player.turretCount > 0 ? 1 : 0;
-}
-
-function showMsg(text, colorClass) {
-    const el = document.getElementById('pickupName'); const msg = document.getElementById('pickupMsg');
-    el.innerText = text; el.className = `font-bold ${colorClass}`;
-    msg.style.opacity = 1; setTimeout(() => msg.style.opacity = 0, 1500);
-}
-
-function toggleShop() {
-    if (!gameRunning && document.getElementById('startMenu').classList.contains('hidden')) return;
-    if (!gameRunning && !isShopOpen) return;
-
-    const shop = document.getElementById('shopMenu');
-    isShopOpen = !isShopOpen;
-    
-    if (isShopOpen) {
-        shop.classList.remove('hidden');
-        updateUI();
-    } else {
-        shop.classList.add('hidden');
-        if(gameRunning) animate();
-    }
-}
-
-function buyItem(item) {
-    if (!player) return;
-    let cost = 0;
-    let success = false;
-
-    if (item === 'repair') {
-        cost = 100;
-        if (player.credits >= cost && player.health < 100) {
-            player.credits -= cost;
-            player.health = Math.min(100, player.health + 50);
-            success = true;
-            showMsg("机体已修复", "text-green-400");
-        }
-    } else if (item === 'ammo') {
-        cost = 50;
-        if (player.credits >= cost && player.weapon !== 'pistol') {
-            player.credits -= cost;
-            player.ammo = WEAPONS[player.weapon].ammo;
-            success = true;
-            showMsg("弹药已装填", "text-white");
-        }
-    } else if (item === 'shield') {
-        cost = 150;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.shield = Math.min(100, player.shield + 50);
-            success = true;
-            showMsg("护盾充能完毕", "text-blue-400");
-        }
-    } else if (item === 'turret') {
-        cost = 200;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.turretCount++;
-            success = true;
-            showMsg("炮台系统上线", "text-yellow-400");
-        }
-    } else if (item === 'material') {
-        cost = 75;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            player.materials += 50;
-            success = true;
-            showMsg("纳米材料获取", "text-orange-400");
-        }
-    } else if (item === 'nuke') {
-        cost = 1000;
-        if (player.credits >= cost) {
-            player.credits -= cost;
-            triggerNuke();
-            success = true;
-            toggleShop();
+    function toggleMarketWindow() {
+        const win = document.getElementById('market-window');
+        const isOpen = win.classList.contains('open');
+        closeAllWindows();
+        if (!isOpen) { 
+            win.classList.add('open');
+            renderMarketContent();
         }
     }
 
-    if (success) {
-        SFX.buy();
-        updateUI();
-    } else {
-        SFX.error();
-    }
-}
+    function renderMarketContent() {
+        const svg = document.getElementById('valuation-chart');
+        svg.innerHTML = ""; 
+        const history = gameState.valuationHistory;
+        const len = history.player.length;
+        if (len < 2) return;
 
-function initGame() {
-    score = 0; walls = []; nextBossScore = 1000;
-    walls.push({x:-50, y:-50, w:WORLD_W+100, h:50, destructible:false});
-    walls.push({x:-50, y:WORLD_H, w:WORLD_W+100, h:50, destructible:false});
-    walls.push({x:-50, y:0, w:50, h:WORLD_H, destructible:false});
-    walls.push({x:WORLD_W, y:0, w:50, h:WORLD_H, destructible:false});
-    for(let i=0; i<25; i++) {
-        const w = Math.random()*200 + 50; const h = Math.random()*200 + 50;
-        const x = Math.random()*(WORLD_W-w-200) + 100; const y = Math.random()*(WORLD_H-h-200) + 100;
-        if(Math.hypot(x-WORLD_W/2, y-WORLD_H/2) > 300) { walls.push({x, y, w, h, destructible:false, color: 'rgba(6, 182, 212, 0.1)'}); }
-    }
-    player = new Player(WORLD_W/2, WORLD_H/2);
-    enemies = []; projectiles = []; enemyProjectiles = []; particles = []; pickups = []; turrets = [];
-    for(let i=0; i<10; i++) spawnPickup();
-    camera.x = player.x - canvas.width/2; camera.y = player.y - canvas.height/2;
-    updateUI();
-}
-
-function spawnEnemy() {
-    let attempts = 0; let safe = false; let x, y, dist, ang;
-    while (!safe && attempts < 20) {
-        attempts++; ang = Math.random()*Math.PI*2; dist = canvas.width/2 + 100 + Math.random() * 200;
-        x = Math.max(50, Math.min(WORLD_W-50, player.x + Math.cos(ang)*dist));
-        y = Math.max(50, Math.min(WORLD_H-50, player.y + Math.sin(ang)*dist));
-        const testRect = { x: x-20, y: y-20, w: 40, h: 40 };
-        let collision = false;
-        for (let w of walls) { if (checkRectOverlap(testRect, w)) { collision = true; break; } }
-        if (Math.hypot(player.x - x, player.y - y) < 400) collision = true;
-        if (!collision) safe = true;
-    }
-    if (safe) {
-        let type = 'normal';
-        if (score > 500 && Math.random() < 0.25) type = 'tank';
-        else if (score > 200 && Math.random() < 0.35) type = 'speed';
-        enemies.push(new Enemy(x, y, type));
-    }
-}
-
-function spawnBoss() {
-    let ang = Math.random()*Math.PI*2;
-    let dist = canvas.width/2 + 300;
-    let x = player.x + Math.cos(ang)*dist;
-    let y = player.y + Math.sin(ang)*dist;
-    x = Math.max(100, Math.min(WORLD_W-100, x));
-    y = Math.max(100, Math.min(WORLD_H-100, y));
-    enemies.push(new Enemy(x, y, 'boss'));
-    const warn = document.getElementById('boss-warning');
-    warn.classList.remove('hidden');
-    showMsg("WARNING: BOSS APPROACHING", "text-red-600");
-    setTimeout(() => { warn.classList.add('hidden'); }, 3000);
-}
-
-function animate() {
-    if (!gameRunning || isShopOpen) return;
-
-    animationId = requestAnimationFrame(animate); frame++;
-    camera.x += (player.x - canvas.width/2 - camera.x) * 0.1; camera.y += (player.y - canvas.height/2 - camera.y) * 0.1;
-    ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    const startX = Math.floor(camera.x/TILE)*TILE; const startY = Math.floor(camera.y/TILE)*TILE;
-    ctx.strokeStyle = 'rgba(20, 20, 30, 0.5)'; ctx.lineWidth = 1; ctx.beginPath();
-    for(let x=startX; x<camera.x+canvas.width; x+=TILE) { ctx.moveTo(x-camera.x, 0); ctx.lineTo(x-camera.x, canvas.height); }
-    for(let y=startY; y<camera.y+canvas.height; y+=TILE) { ctx.moveTo(0, y-camera.y); ctx.lineTo(canvas.width, y-camera.y); }
-    ctx.stroke();
-
-    walls.forEach(w => {
-        const dx = w.x - camera.x; const dy = w.y - camera.y;
-        if(dx+w.w < 0 || dx > canvas.width || dy+w.h < 0 || dy > canvas.height) return;
-        ctx.save(); ctx.translate(dx, dy);
-        if(w.destructible) {
-            ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 10;
-            ctx.strokeRect(0,0,w.w,w.h); ctx.fillStyle = `rgba(251, 191, 36, ${w.health/w.maxHealth * 0.3})`; ctx.fillRect(0,0,w.w,w.h);
-            ctx.fillStyle = 'red'; ctx.fillRect(5, -10, w.w-10, 4); ctx.fillStyle = '#0f0'; ctx.fillRect(5, -10, (w.w-10)*(w.health/w.maxHealth), 4);
-        } else {
-            ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2; ctx.shadowColor = '#06b6d4'; ctx.shadowBlur = 10;
-            ctx.fillStyle = w.color || 'rgba(6,182,212,0.1)'; ctx.strokeRect(0,0,w.w,w.h); ctx.fillRect(0,0,w.w,w.h);
-        }
-        ctx.restore();
-    });
-
-    if (INPUT.rightDown) {
-        const mx = INPUT.x + camera.x; const my = INPUT.y + camera.y;
-        const bx = Math.floor(mx/TILE)*TILE; const by = Math.floor(my/TILE)*TILE;
-        ctx.save(); ctx.translate(bx - camera.x, by - camera.y);
-        ctx.strokeStyle = player.materials >= 10 ? 'lime' : 'red'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-        ctx.strokeRect(0,0,TILE,TILE); ctx.restore();
-    }
-
-    player.update();
-    
-    if (INPUT.down) {
-        const w = WEAPONS[player.weapon];
-        if (player.cd <= 0 && (player.ammo > 0 || w.ammo === Infinity)) {
-            player.cd = w.cd; if(w.ammo !== Infinity) player.ammo--; updateUI();
-            if (player.weapon === 'laser') {
-                SFX.shoot('laser');
-                const endX = player.x + Math.cos(player.angle) * 800; const endY = player.y + Math.sin(player.angle) * 800;
-                particles.push({type:'beam', x1:player.x, y1:player.y, x2:endX, y2:endY, life:10, color:'#22d3ee'});
-                enemies.forEach(e => {
-                    const A = player.x - e.x; const B = player.y - e.y; const C = endX - player.x; const D = endY - player.y;
-                    const dot = A * C + B * D; const len_sq = C * C + D * D; const param = -dot / len_sq;
-                    let xx, yy; if (param < 0) { xx = player.x; yy = player.y; } else if (param > 1) { xx = endX; yy = endY; } else { xx = player.x + param * C; yy = player.y + param * D; }
-                    if (Math.hypot(e.x - xx, e.y - yy) < e.radius + 10) e.takeDamage(w.dmg);
-                });
-            } else {
-                SFX.shoot(player.weapon);
-                for(let i=0; i<w.count; i++) {
-                    const ang = player.angle + (Math.random()-0.5)*w.spread;
-                    const v = {x:Math.cos(ang)*w.speed, y:Math.sin(ang)*w.speed};
-                    const type = (player.weapon === 'rocket' ? 'rocket' : (player.weapon === 'bouncer' ? 'bounce' : 'normal'));
-                    projectiles.push(new Projectile(player.x + Math.cos(ang)*25, player.y + Math.sin(ang)*25, 4, w.color, v, w.dmg, type, player.weapon === 'rocket' ? {radius: w.radius} : {}));
-                }
-                const recoilAmt = (player.weapon === 'shotgun' ? 5 : 2);
-                const rx = -Math.cos(player.angle) * recoilAmt;
-                const ry = -Math.sin(player.angle) * recoilAmt;
-                if (!player.checkCol(player.x + rx, player.y)) player.x += rx;
-                if (!player.checkCol(player.x, player.y + ry)) player.y += ry;
-            }
-        } else if (player.ammo <= 0 && w.ammo !== Infinity) {
-            player.weapon = 'pistol'; player.ammo = Infinity; updateUI();
-        }
-    }
-
-    turrets.forEach(t => { t.update(); t.draw(); });
-    projectiles.forEach(p => { p.update(); p.draw(); }); projectiles = projectiles.filter(p => !p.markedForDelete);
-    
-    enemyProjectiles.forEach(p => {
-        p.update(); p.draw();
-        if (Math.hypot(p.x - player.x, p.y - player.y) < player.radius + p.radius) {
-            let dmg = 15; 
-            if (player.shield > 0) { player.shield -= dmg; if(player.shield < 0) { player.health += player.shield; player.shield = 0; } } else { player.health -= dmg; }
-            updateUI();
-            SFX.play(150, 'square', 0.1, 0.2);
-            p.markedForDelete = true;
-            createParticles(player.x, player.y, '#06b6d4', 5, 3);
-            if (player.health <= 0) {
-                gameRunning = false; BGM.stop();
-                document.getElementById('startMenu').classList.remove('hidden'); 
-                document.getElementById('finalScoreContainer').classList.remove('hidden'); 
-                document.getElementById('finalScore').innerText = score; 
-                document.querySelector('#startBtnText').innerText = "REBOOT SYSTEM";
-                document.getElementById('returnToTitleBtn').classList.remove('hidden');
+        let maxVal = 100;
+        for (let k in history) {
+            if (history[k].length > 0) {
+                maxVal = Math.max(maxVal, ...history[k]);
             }
         }
-    });
-    enemyProjectiles = enemyProjectiles.filter(p => !p.markedForDelete);
+        
+        const w = 300, h = 100;
+        const dx = w / (len - 1);
+        const colors = { player: '#00ff9d', level0: '#ef4444', level1: '#ef4444', level2: '#ef4444', level3: '#ef4444' };
+        
+        for (let k in history) {
+            if (history[k].length === 0) continue;
+            let points = "";
+            history[k].forEach((val, i) => {
+                const x = i * dx;
+                const y = h - (val / maxVal * h);
+                points += `${x},${y} `;
+            });
+            const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+            polyline.setAttribute("points", points);
+            polyline.setAttribute("fill", "none");
+            polyline.setAttribute("stroke", colors[k]);
+            polyline.setAttribute("stroke-width", k==='player'?2:1);
+            if (k !== 'player') polyline.setAttribute("opacity", "0.5");
+            svg.appendChild(polyline);
+        }
 
-    particles.forEach((p, i) => {
-        if(p.type === 'beam') { ctx.save(); ctx.translate(-camera.x, -camera.y); ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.lineWidth = p.life; ctx.strokeStyle = `rgba(34, 211, 238, ${p.life/10})`; ctx.shadowBlur = 20; ctx.shadowColor = p.color; ctx.stroke(); ctx.restore(); p.life--; } 
-        else if (p.type === 'shockwave') { ctx.save(); ctx.translate(p.x - camera.x, p.y - camera.y); ctx.beginPath(); ctx.arc(0,0, p.r * (1 - p.life/p.maxLife), 0, Math.PI*2); ctx.strokeStyle = `rgba(249, 115, 22, ${p.life/p.maxLife})`; ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); p.life--; } 
-        else { 
-            p.x += p.vx; p.y += p.vy; p.life -= 0.05; 
-            ctx.save(); ctx.translate(p.x - camera.x, p.y - camera.y); 
-            ctx.globalAlpha = Math.max(0, p.life); 
-            ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(0,0, 3, 0, Math.PI*2); ctx.fill(); 
-            ctx.restore(); 
-        }
-    });
-    particles = particles.filter(p => p.life > 0);
-    
-    pickups.forEach((p, i) => {
-        const bob = Math.sin(frame*0.1)*5;
-        const dx = p.x-camera.x; const dy = p.y-camera.y + bob;
-        if (dx > -50 && dx < canvas.width+50 && dy > -50 && dy < canvas.height+50) {
-             ctx.save(); ctx.translate(dx, dy);
-             ctx.fillStyle = (p.type==='nuke'?'#ff0000':(p.type==='ammo'?'#fff':(p.type==='health'?'#22c55e':WEAPONS[p.type]?WEAPONS[p.type].color:'#22d3ee')));
-             if(p.type === 'shield') ctx.fillStyle = '#60a5fa';
-             if(p.type === 'turret') ctx.fillStyle = '#fbbf24';
-             ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle; ctx.font = "20px Arial"; ctx.textAlign = "center"; 
-             let icon = "?"; if(p.type==='health') icon = "✚"; if(p.type==='shield') icon = "🛡"; if(p.type==='ammo') icon = "⑊"; if(p.type==='turret') icon = "♜"; if(p.type==='nuke') icon = "☢"; if(WEAPONS[p.type]) icon = "🔫";
-             ctx.fillText(icon, 0, 8); ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth=2; ctx.strokeRect(-12,-12,24,24); ctx.restore();
-        }
-        if (Math.hypot(player.x - p.x, player.y - p.y) < player.radius + 15) {
-            if (p.type === 'nuke') { triggerNuke(); } else {
-                SFX.play(1000, 'sine', 0.1, 0.1);
-                if (p.type === 'health') { player.health = Math.min(100, player.health+30); showMsg("HP 恢复", "text-green-400"); }
-                else if (p.type === 'shield') { player.shield = Math.min(100, player.shield+50); showMsg("能量护盾", "text-blue-400"); }
-                else if (p.type === 'ammo') { player.ammo += 50; showMsg("弹药补给", "text-white"); }
-                else if (p.type === 'turret') { player.turretCount++; showMsg("自动炮台", "text-yellow-400"); }
-                else { player.weapon = p.type; player.ammo = WEAPONS[p.type].ammo; showMsg(WEAPONS[p.type].name, "text-purple-400"); }
-                updateUI();
-            }
-            pickups.splice(i, 1);
-        }
-    });
+        // === Render Leaderboard ===
+        const leaderList = document.getElementById('market-cap-leaderboard');
+        let companies = [];
 
-    enemies.forEach((e) => {
-        e.update(); e.draw();
-        projectiles.forEach(p => {
-            if (p.markedForDelete) return;
-            const dist = Math.hypot(e.x - p.x, e.y - p.y);
-            if (dist < e.radius + p.r) { if (p.type !== 'rocket') e.takeDamage(p.dmg); p.explode(); }
+        // 1. Player
+        companies.push({
+            name: gameState.player.name,
+            val: gameState.player.valuation,
+            isPlayer: true,
+            role: 'ALL'
         });
-        if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
-            let dmg = 0.5; if (player.shield > 0) { player.shield -= dmg; if(player.shield < 0) { player.health += player.shield; player.shield = 0; } } else { player.health -= dmg; }
-            updateUI();
-            if (frame % 20 === 0) SFX.play(100, 'sawtooth', 0.1, 0.1);
-            if (player.health <= 0) {
-                gameRunning = false; BGM.stop();
-                document.getElementById('startMenu').classList.remove('hidden'); 
-                document.getElementById('finalScoreContainer').classList.remove('hidden'); 
-                document.getElementById('finalScore').innerText = score; 
-                document.querySelector('#startBtnText').innerText = "REBOOT SYSTEM";
-                document.getElementById('returnToTitleBtn').classList.remove('hidden');
-            }
+
+        // 2. Competitors
+        ['level0', 'level1', 'level2', 'level3'].forEach(role => {
+            const conf = tierConfig[role];
+            const data = gameState.marketData[role];
+            if (conf.topComp.acquired) return;
+
+            // Calculate Valuation: marketSize * (share/100) * 10
+            const val = data.marketSize * (conf.topComp.share / 100) * 10;
+            companies.push({
+                name: conf.topComp.name,
+                val: val,
+                isPlayer: false,
+                role: conf.short
+            });
+        });
+
+        // Sort descending
+        companies.sort((a,b) => b.val - a.val);
+
+        let lbHtml = "";
+        companies.forEach((c, idx) => {
+            const rank = idx + 1;
+            const colorClass = c.isPlayer ? "text-green-400 bg-green-900/30 border-l-2 border-green-500" : "text-gray-300";
+            const valStr = Math.floor(c.val).toLocaleString();
+            const rankClass = rank === 1 ? "top-1" : (rank === 2 ? "top-2" : (rank === 3 ? "top-3" : ""));
+            
+            lbHtml += `
+            <div class="market-ranking-row ${c.isPlayer ? 'bg-green-900/20' : ''}">
+                <div class="rank-num ${rankClass}">#${rank}</div>
+                <div class="flex-1">
+                    <div class="text-sm font-bold ${c.isPlayer ? 'text-green-400' : 'text-white'}">${c.name}</div>
+                    <div class="text-xs text-gray-500">${c.role}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm font-mono text-market-purple font-bold">$${valStr} B</div>
+                </div>
+            </div>`;
+        });
+        leaderList.innerHTML = lbHtml;
+
+        // === Render M&A Targets ===
+        const list = document.getElementById('ma-list');
+        let html = "";
+        ['level0', 'level1', 'level2', 'level3'].forEach(role => {
+            const comp = tierConfig[role].topComp;
+            if (comp.acquired) return; 
+
+            const valuation = gameState.marketData[role].marketSize * (comp.share / 100) * 10;
+            const cost = Math.floor(valuation*20);
+
+            html += `
+            <div class="bg-purple-900/10 border border-purple-500/30 p-3 rounded flex justify-between items-center hover:bg-purple-900/20 transition-colors">
+                <div>
+                    <div class="text-sm font-bold text-white">${comp.name}</div>
+                    <div class="text-xs text-gray-400">行业: ${tierConfig[role].short}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-[var(--market-purple)] mb-1 font-mono">$${cost} B</div>
+                    <button class="bg-purple-700 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded shadow-lg" onclick="acquireCompany('${role}', ${cost})">收购</button>
+                </div>
+            </div>`;
+        });
+        
+        if (html === "") html = "<div class='text-gray-500 text-center text-xs py-4'>暂无更多并购目标</div>";
+        list.innerHTML = html;
+    }
+
+    function acquireCompany(role, cost) {
+        if (!spendCash(cost)) return;
+
+        const config = tierConfig[role];
+        config.topComp.acquired = true; 
+        
+        gameState.tech[role].unlocked = true;
+        gameState.tech[role].specs.forEach(s => s.level = 2);
+
+        gameState.products[role] = {
+            name: config.topComp.flagship + " (Acquired)",
+            specs: config.topComp.specs,
+            score: config.topComp.score
+        };
+        
+        const data = gameState.marketData[role];
+        if (data) {
+            const newShare = Math.min(95, data.shares.player + config.topComp.share); 
+            data.shares.player = newShare;
+            data.shares.top = 0;
+            data.shares.avg = Math.max(0, 100 - newShare);
+            if (!data.targets) data.targets = { player: 0 };
+            data.targets.player = newShare;           
+            data.margin = Math.max(data.margin, 0.3); 
         }
-    });
-    enemies = enemies.filter(e => e.hp > 0);
-    
-    if (score >= nextBossScore && !enemies.some(e => e.type === 'boss')) {
-        spawnBoss();
-        nextBossScore += 2500;
+
+        const techCompIdx = techCompanies.findIndex(c => c.role === role);
+        if (techCompIdx !== -1) {
+            const comp = techCompanies[techCompIdx];
+            gameState.branches.push({ role: role, coords: comp.coords, regionName: "Global" }); 
+        }
+
+        toggleMarketWindow();
+        drawMapObjects();
+        pushNews(`<span class="text-[var(--market-purple)] font-bold">重磅收购: ${gameState.player.name} 完成了对 ${config.topComp.name} 的全资收购!</span>`);
     }
 
-    const spawnRate = Math.max(25, 90 - Math.floor(score/100)); 
-    if (frame % spawnRate === 0) spawnEnemy();
-    player.draw();
-}
-
-window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-window.addEventListener('keydown', e => {
-    KEYS[e.key.toLowerCase()] = true;
-    if (e.key.toLowerCase() === 'e') { if (player && player.turretCount > 0) { turrets.push(new Turret(player.x, player.y)); player.turretCount--; updateUI(); SFX.build(); } }
-    if (e.key.toLowerCase() === 'b') { toggleShop(); }
-});
-window.addEventListener('keyup', e => KEYS[e.key.toLowerCase()] = false);
-window.addEventListener('mousemove', e => { INPUT.x = e.clientX; INPUT.y = e.clientY; });
-window.addEventListener('mousedown', e => {
-    if (e.button === 0) INPUT.down = true;
-    if (e.button === 2) {
-        INPUT.rightDown = true;
-        const mx = INPUT.x + camera.x; const my = INPUT.y + camera.y;
-        const bx = Math.floor(mx/TILE)*TILE; const by = Math.floor(my/TILE)*TILE;
-        const exists = walls.some(w => w.x === bx && w.y === by);
-        const pRect = {x: player.x-20, y: player.y-20, w:40, h:40};
-        const wRect = {x: bx, y: by, w: TILE, h: TILE};
-        const overlapPlayer = checkRectOverlap(pRect, wRect);
-        if (!exists && !overlapPlayer && player.materials >= 10) { walls.push({ x: bx, y: by, w: TILE, h: TILE, destructible: true, health: 50, maxHealth: 50 }); player.materials -= 10; updateUI(); SFX.build(); createParticles(bx+25, by+25, '#fbbf24', 5, 2); } 
-        else if (player.materials < 10 && !exists && !overlapPlayer) { SFX.error(); showMsg("材料不足!", "text-red-500"); }
+    function closeAllWindows() {
+        document.querySelectorAll('.side-window').forEach(w => w.classList.remove('open'));
     }
-});
-window.addEventListener('mouseup', e => { if (e.button === 0) INPUT.down = false; if (e.button === 2) INPUT.rightDown = false; });
-window.addEventListener('contextmenu', e => e.preventDefault());
+    function toggleProductWindow() {
+        const win = document.getElementById('product-window'); const isOpen = win.classList.contains('open'); closeAllWindows(); if (!isOpen) { switchProductTab(gameState.player.role); win.classList.add('open'); }
+    }
+    function toggleTechWindow() {
+        const win = document.getElementById('tech-window'); const isOpen = win.classList.contains('open'); closeAllWindows(); if (!isOpen) { switchTechTab(gameState.player.role); win.classList.add('open'); document.getElementById('tech-detail-panel').innerHTML = '<div class="text-center text-gray-500 text-sm">点击上方科技节点查看详细信息...</div>'; }
+    }
+    function toggleIntelWindow() {
+        const win = document.getElementById('intel-window'); const isOpen = win.classList.contains('open'); closeAllWindows(); if (!isOpen) { switchIntelTab(gameState.player.role); win.classList.add('open'); }
+    }
 
-document.getElementById('startBtn').addEventListener('click', () => {
-    document.getElementById('startMenu').classList.add('hidden');
-    document.getElementById('finalScoreContainer').classList.add('hidden');
-    document.getElementById('returnToTitleBtn').classList.add('hidden');
-    gameRunning = true; isShopOpen = false;
-    BGM.start(); initGame(); animate();
-});
+    // =================== 秘密行动逻辑 ===================
+    function toggleOpsWindow() {
+        const win = document.getElementById('ops-window');
+        const isOpen = win.classList.contains('open');
+        closeAllWindows();
+        if (!isOpen) {
+            renderOpsList();
+            win.classList.add('open');
+        }
+    }
 
-document.getElementById('returnToTitleBtn').addEventListener('click', () => {
-    document.getElementById('finalScoreContainer').classList.add('hidden');
-    document.getElementById('returnToTitleBtn').classList.add('hidden');
-    document.querySelector('#startBtnText').innerText = "INITIATE";
-});
+    function logOps(msg, status) {
+        const consoleDiv = document.getElementById('ops-console');
+        const line = document.createElement('div');
+        line.className = `console-line ${status === 'success' ? 'success' : (status === 'fail' ? 'fail' : '')}`;
+        line.innerText = `> ${msg}`;
+        consoleDiv.appendChild(line);
+        consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
 
-const helpMenu = document.getElementById('helpMenu');
-document.getElementById('helpBtn').addEventListener('click', () => helpMenu.classList.remove('hidden'));
-document.getElementById('closeHelpBtn').addEventListener('click', () => helpMenu.classList.add('hidden'));
+    function renderOpsList() {
+        const list = document.getElementById('ops-list');
+        let html = "";
+        
+        const myRoles = Object.keys(gameState.tech).filter(r => gameState.tech[r].unlocked);
+        
+        if (myRoles.length === 0) {
+            list.innerHTML = `<div class="text-center text-gray-500 mt-10">暂无行动能力...</div>`;
+            return;
+        }
 
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isShopOpen) toggleShop(); });
+        opsDatabase.forEach(op => {
+            myRoles.forEach(myRole => {
+                let targetRole = null;
+                let badge = "";
+                let badgeClass = "";
 
-const originalToggleShop = toggleShop;
-toggleShop = function() {
-    if (!gameRunning && document.getElementById('startMenu').classList.contains('hidden')) return;
-    if (!gameRunning && !isShopOpen) return;
-    const shop = document.getElementById('shopMenu');
-    isShopOpen = !isShopOpen;
-    if (isShopOpen) { shop.classList.remove('hidden'); updateUI(); } 
-    else { shop.classList.add('hidden'); if(gameRunning) animate(); }
-};
+                if (op.type === 'rival') {
+                    targetRole = myRole;
+                    badge = "RIVAL (同级)";
+                    badgeClass = "badge-rival";
+                } else if (op.type === 'upstream') {
+                    targetRole = tierConfig[myRole].up;
+                    badge = "UPSTREAM (上游)";
+                    badgeClass = "badge-upstream";
+                } else if (op.type === 'downstream') {
+                    targetRole = tierConfig[myRole].down;
+                    badge = "DOWNSTREAM (下游)";
+                    badgeClass = "badge-downstream";
+                }
 
-initGame();
-</script>
+                if (targetRole && !tierConfig[targetRole].topComp.acquired) {
+                    const targetName = tierConfig[targetRole].topComp.name;
+                    html += `
+                    <div class="op-card" onclick="executeOp('${op.id}', '${targetRole}')">
+                        <div class="flex justify-between items-start mb-1">
+                            <div class="text-sm font-bold text-white">${op.name}</div>
+                            <div class="text-xs text-[var(--ops-red)] border border-[var(--ops-red)] px-1">COST: $${op.cost}</div>
+                        </div>
+                        <div class="mb-2">
+                            <span class="op-badge ${badgeClass}">${badge}</span>
+                            <span class="text-xs text-gray-400">Target: <span class="text-white font-bold">${targetName}</span></span>
+                        </div>
+                        <div class="text-xs text-gray-500 mb-2">${op.desc}</div>
+                        <div class="text-[11px] text-gray-600 flex justify-between">
+                            <span>SUCCESS RATE: ${Math.floor(op.chance * 100)}%</span>
+                            <span class="text-[var(--ops-red)]">>> EXECUTE</span>
+                        </div>
+                    </div>`;
+                }
+            });
+        });
+
+        if (html === "") html = `<div class="text-center text-gray-500 text-xs mt-4">当前无可用目标 (可能已全部垄断)。</div>`;
+        list.innerHTML = html;
+    }
+
+    function findMyRoleForTarget(opType, targetRole) {
+        const myRoles = Object.keys(gameState.tech).filter(r => gameState.tech[r].unlocked);
+        for (const myRole of myRoles) {
+            if (opType === 'rival' && myRole === targetRole) return myRole;
+            if (opType === 'upstream' && tierConfig[myRole].up === targetRole) return myRole;
+            if (opType === 'downstream' && tierConfig[myRole].down === targetRole) return myRole;
+        }
+        return null;
+    }
+
+    function applyOpEffect(op, targetRole, myRole) {
+        const config = tierConfig[targetRole];
+        const data = gameState.marketData[targetRole];
+        if (!config || !data) {
+            return "目标市场结构不完整，行动效果有限。";
+        }
+        if (!data.targets) data.targets = { player: data.shares.player || 0 };
+
+        let msg = "";
+
+        switch (op.id) {
+            case 'sabotage': {
+                const beforeShare = config.topComp.share;
+                config.topComp.share = Math.max(5, config.topComp.share - 5);
+                const delta = beforeShare - config.topComp.share;
+                const beforeScore = config.topComp.score;
+                config.topComp.score = Math.max(30, config.topComp.score - 5);
+                const gainTarget = delta > 0 ? delta * 0.6 : 0;
+                data.targets.player = Math.min(95, (data.targets.player || data.shares.player) + gainTarget);
+                msg = `${config.topComp.name} 产线严重受损，良率暴跌，竞争力 ${beforeScore}→${config.topComp.score}，预计有 ${gainTarget.toFixed(1)}pt 份额向你转移。`;
+                break;
+            }
+            case 'poach': {
+                const addShare = 6;
+                data.targets.player = Math.min(95, (data.targets.player || data.shares.player) + addShare);
+                data.margin = Math.min(0.85, (data.margin || 0) + 0.03);
+                msg = `成功从 ${config.topComp.name} 挖走关键团队，你在 ${config.name} 的目标份额 +${addShare}pt，利润率小幅提升。`;
+                break;
+            }
+            case 'cut_supply': {
+                const beforeMs = data.marketSize;
+                data.marketSize *= 0.95;
+                const beforeShare2 = config.topComp.share;
+                config.topComp.share = Math.max(5, config.topComp.share - 3);
+                const delta2 = beforeShare2 - config.topComp.share;
+                msg = `你限制上游供货，${config.topComp.name} 在 ${config.name} 的基础份额 -${delta2.toFixed(1)}pt，TAM 从 ${beforeMs.toFixed(1)}B 收缩至 ${data.marketSize.toFixed(1)}B。`;
+                break;
+            }
+            case 'backdoor': {
+                if (gameState.tech[targetRole] && gameState.tech[targetRole].unlocked) {
+                    const add2 = 4;
+                    data.targets.player = Math.min(95, (data.targets.player || data.shares.player) + add2);
+                    data.margin = Math.min(0.9, (data.margin || 0) + 0.02);
+                    msg = `成功在 ${config.topComp.name} 供应链中植入后门，你在 ${config.name} 的目标份额 +${add2}pt，并获取额外利润空间。`;
+                } else {
+                    msg = `后门模块已植入 ${config.topComp.name} 供应链，等待未来进入 ${config.name} 市场时激活。`;
+                }
+                break;
+            }
+            case 'cancel_order': {
+                const beforeMs2 = data.marketSize;
+                data.marketSize *= 0.97;
+                const beforeShare3 = config.topComp.share;
+                config.topComp.share = Math.max(5, config.topComp.share - 2);
+                const delta3 = beforeShare3 - config.topComp.share;
+                if (myRole && gameState.marketData[myRole]) {
+                    const myData = gameState.marketData[myRole];
+                    myData.margin = Math.min(0.85, (myData.margin || 0) + 0.02);
+                }
+                msg = `你对 ${config.topComp.name} 发起恶意砍单，上游 ${config.name} TAM 从 ${beforeMs2.toFixed(1)}B 降至 ${data.marketSize.toFixed(1)}B，基础份额 -${delta3.toFixed(1)}pt。`;
+                break;
+            }
+            case 'patent_troll': {
+                const beforeShare4 = config.topComp.share;
+                const beforeScore2 = config.topComp.score;
+                config.topComp.share = Math.max(5, config.topComp.share - 4);
+                config.topComp.score = Math.max(20, config.topComp.score - 8);
+                const delta4 = beforeShare4 - config.topComp.share;
+                msg = `专利诉讼缠身：${config.topComp.name} 在 ${config.name} 的基础份额 -${delta4.toFixed(1)}pt，竞争力 ${beforeScore2}→${config.topComp.score}。`;
+                break;
+            }
+            default:
+                msg = "行动执行完毕。";
+        }
+
+        return msg;
+    }
+
+    function executeOp(opId, targetRole) {
+        const op = opsDatabase.find(o => o.id === opId);
+        if (!op) return;
+
+        if (!spendCash(op.cost)) {
+            logOps("资金不足，行动中止。", "fail");
+            return;
+        }
+
+        const myRole = findMyRoleForTarget(op.type, targetRole);
+        logOps(`正在执行: ${op.name} -> ${tierConfig[targetRole].topComp.name}...`);
+
+        setTimeout(() => {
+            const roll = Math.random();
+            if (roll <= op.chance) {
+                const resultMsg = applyOpEffect(op, targetRole, myRole);
+                logOps(`任务成功! ${resultMsg}`, "success");
+
+                if (document.getElementById('intel-window').classList.contains('open')) renderIntelContent(targetRole);
+                
+                pushNews(`<span class="text-red-500 font-bold">突发新闻: ${tierConfig[targetRole].topComp.name} 遭遇不明攻击!</span>`);
+
+            } else {
+                logOps("任务失败! 行动组被迫撤离。", "fail");
+            }
+        }, 800);
+    }
+
+    function switchIntelTab(role) {
+        gameState.intelTabRole = role;
+        if (gameState.selectedCompetitor && gameState.selectedCompetitor.role !== role) {
+            gameState.selectedCompetitor = null;
+        }
+        document.querySelectorAll('#intel-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('itab-' + role).classList.add('active');
+        renderIntelContent(role);
+    }
+
+    function renderIntelContent(role) {
+        const config = tierConfig[role];
+        const isUnlocked = gameState.tech[role].unlocked;
+        const mData = gameState.marketData[role];
+        
+        document.getElementById('market-size-display').innerText = "$" + Math.floor(mData.marketSize) + " B";
+        
+        const playerShare = mData.shares.player;
+        const topShare = mData.shares.top;
+        const otherShare = mData.shares.avg; 
+        
+        const barContainer = document.getElementById('market-share-bar');
+        barContainer.innerHTML = `
+            ${config.topComp.acquired ? '' : `<div class="market-bar-segment" style="width:${topShare}%; background:#ef4444; color:white;">${config.topComp.name} ${topShare.toFixed(1)}%</div>`}
+            ${playerShare > 0.1 ? `<div class="market-bar-segment" style="width:${playerShare}%; background:var(--primary-green); color:black;">YOU ${playerShare.toFixed(1)}%</div>` : ''}
+            <div class="market-bar-segment" style="width:${otherShare}%; background:#333; color:#888;">OTHERS</div>
+        `;
+        
+        const list = document.getElementById('competitor-list');
+        let html = "";
+        if (!config.topComp.acquired) {
+            html += `<div class="company-item" onclick="showCompetitorDetail('${role}', 'top')"><div class="flex justify-between items-center"><span class="text-sm font-bold text-white">${config.topComp.name}</span><span class="text-xs text-red-500">TOP 1</span></div></div>`;
+        }
+        if (isUnlocked) {
+            html += `<div class="company-item" onclick="showCompetitorDetail('${role}', 'player')"><div class="flex justify-between items-center"><span class="text-sm font-bold text-[var(--primary-green)]">${gameState.player.name}</span><span class="text-xs text-[var(--primary-green)]">YOU</span></div></div>`;
+        }
+        html += `<div class="company-item" onclick="showCompetitorDetail('${role}', 'avg')"><div class="flex justify之间 items-center"><span class="text-sm font-bold text-gray-400">行业平均</span></div></div>`;
+        
+        list.innerHTML = html;
+
+        if (gameState.selectedCompetitor && gameState.selectedCompetitor.role === role) {
+            showCompetitorDetail(role, gameState.selectedCompetitor.type);
+        }
+    }
+
+    function showCompetitorDetail(role, type) {
+        gameState.selectedCompetitor = { role, type }; 
+        
+        const config = tierConfig[role];
+        const panel = document.getElementById('product-detail-panel');
+        let data, colorClass;
+        
+        if (type === 'top') { data = config.topComp; colorClass = "text-red-500"; } 
+        else if (type === 'avg') { data = config.avgComp; colorClass = "text-gray-400"; } 
+        else if (type === 'player') {
+            const product = gameState.products[role];
+            if (!product) { panel.innerHTML = `<div class="text-center text-gray-500 text-xs mt-4">尚未发布产品。</div>`; return; }
+            data = { name: gameState.player.name, flagship: product.name, specs: product.specs, score: product.score };
+            colorClass = "text-[var(--primary-green)]";
+        }
+
+        const labels = config.specs;
+        let barsHtml = "";
+        data.specs.forEach((val, idx) => {
+            barsHtml += `<div class="spec-comparison-row"><div class="spec-label">${labels[idx]}</div><div class="spec-bar-bg"><div class="spec-bar-fill" style="width: ${val}%; background-color: ${type==='player'?'#00ff9d':(type==='top'?'#ef4444':'#888')}"></div></div><div class="spec-val">${val}</div></div>`;
+        });
+        panel.innerHTML = `<div class="flex justify-between items-start mb-3 border-b border-gray-700 pb-2"><div><div class="text-xs text-gray-500">旗舰产品</div><div class="text-lg font-bold text白">${data.flagship}</div></div><div class="text-right"><div class="text-xs text-gray-500">竞争力</div><div class="text-xl font-bold ${colorClass}">${data.score}</div></div></div><div class="space-y-1">${barsHtml}</div>`;
+    }
+
+    function updateProductStats() {
+        const role = gameState.currentTabRole;
+        const config = tierConfig[role];
+        const bonus = getRegionBonus(role);
+        
+        const vals = [1, 2, 3].map(i => {
+            const slider = document.getElementById(`slider-${i}`);
+            let v = parseInt(slider.value);
+            const limit = parseInt(slider.dataset.maxLimit || 20);
+            if (v > limit) { v = limit; slider.value = limit; }
+            document.getElementById(`val-spec-${i}`).innerText = v;
+            return v;
+        });
+
+        let cost = config.calcCost(vals[0], vals[1], vals[2]);
+        cost *= bonus.costFactor; 
+        
+        document.getElementById('calc-cost').innerText = Math.floor(cost);
+        updateProfit(vals); 
+    }
+
+    function updateProfit(vals) {
+        if (!vals) vals = [1,2,3].map(i => parseInt(document.getElementById(`slider-${i}`).value));
+        const role = gameState.currentTabRole;
+        const bonus = getRegionBonus(role);
+        
+        const rawCost = parseInt(document.getElementById('calc-cost').innerText);
+        const cost = isNaN(rawCost) ? 0 : rawCost;
+        const priceInput = parseInt(document.getElementById('product-price').value);
+        const price = Math.max(1, isNaN(priceInput) ? 0 : priceInput); 
+        
+        const margin = price - cost;
+        const marginPercent = price > 0 ? Math.round((margin / price) * 100) : 0;
+        const el = document.getElementById('calc-margin');
+        el.innerText = marginPercent + "%";
+        el.className = "text-lg font-bold " + (marginPercent < 0 ? "text-red-500" : "text-green-400");
+
+        const totalSpec = vals.reduce((a,b)=>a+b, 0);
+        const maxPossibleSpec = 300; 
+        const powerPercent = Math.min(100, Math.round((totalSpec / maxPossibleSpec) * 100));
+        
+        let score;
+        if (price > 0) {
+            let valueRatio = (totalSpec * 6) / price;
+            if (price < cost) valueRatio *= 0.9; 
+
+            const baseScore = 10;                  
+            score = baseScore + valueRatio * 100; 
+            score = score * bonus.compBoost;        
+
+            score = Math.max(5, Math.min(100, Math.round(score)));
+        } else {
+            score = 5;
+        }
+
+        document.getElementById('calc-power').innerText = powerPercent + "%";
+        document.getElementById('calc-score').innerText = score;
+    }
+
+    function initTechData(startRole) {
+        const roles = ['level0', 'level1', 'level2', 'level3'];
+        roles.forEach(role => { gameState.tech[role] = { unlocked: (role === startRole), specs: [0, 1, 2].map(i => ({ level: 0 })) }; });
+    }
+    const regionList = document.getElementById('region-list');
+    for (const [key, data] of Object.entries(regionsData)) {
+        const btn = document.createElement('button');
+        btn.className = 'region-select-btn';
+        btn.innerHTML = `${data.label} <span class="float-right text-[10px] ${data.class}">[${data.diff}]</span>`;
+        btn.onclick = () => { gameState.player.region = key; document.querySelectorAll('.region-select-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.getElementById('region-desc').innerText = data.desc; checkReady(); };
+        regionList.appendChild(btn);
+    }
+    function selectRole(roleKey, card) { gameState.player.role = roleKey; document.querySelectorAll('.chain-card').forEach(c => c.classList.remove('selected')); card.classList.add('selected'); checkReady(); }
+    function checkReady() { if (document.getElementById('company-name-input').value && gameState.player.region && gameState.player.role) document.getElementById('start-btn').classList.add('ready'); else document.getElementById('start-btn').classList.remove('ready'); }
+    document.getElementById('company-name-input').addEventListener('input', (e) => { gameState.player.name = e.target.value; checkReady(); });
+    function enterPlacementMode() { initTechData(gameState.player.role); gameState.step = 'placement'; document.getElementById('setup-overlay').style.display = 'none'; document.body.classList.remove('setup-mode'); document.body.classList.add('placement-mode'); document.getElementById('hint-type').innerText = "全球总部"; document.getElementById('hint-region-name').innerText = regionsData[gameState.player.region].label; document.getElementById('placement-hint').style.display = 'block'; updateMapStyles(); }
+    function generateTabs() { const roles = ['level0', 'level1', 'level2', 'level3']; let prodTabsHtml = "", techTabsHtml = "", intelTabsHtml = ""; roles.forEach(role => { const name = tierConfig[role].short; prodTabsHtml += `<div class="tab-btn" onclick="switchProductTab('${role}')" id="ptab-${role}">${name}</div>`; techTabsHtml += `<div class="tab-btn" onclick="switchTechTab('${role}')" id="ttab-${role}">${name}</div>`; intelTabsHtml += `<div class="tab-btn" onclick="switchIntelTab('${role}')" id="itab-${role}">${name}</div>`; }); document.getElementById('product-tabs').innerHTML = prodTabsHtml; document.getElementById('tech-tabs').innerHTML = techTabsHtml; document.getElementById('intel-tabs').innerHTML = intelTabsHtml; }
+    function switchProductTab(role) { gameState.currentTabRole = role; document.querySelectorAll('#product-tabs .tab-btn').forEach(b => b.classList.remove('active')); document.getElementById('ptab-' + role).classList.add('active'); updateProductUI(role); }
+    function updateProductUI(role) { const isUnlocked = gameState.tech[role].unlocked; const mask = document.getElementById('product-locked-mask'); if (!isUnlocked) { mask.style.display = "flex"; return; } mask.style.display = "none"; const config = tierConfig[role]; const techState = gameState.tech[role]; const caps = [20, 50, 70, 100]; [0, 1, 2].forEach(idx => { const maxVal = caps[techState.specs[idx].level]; const slider = document.getElementById(`slider-${idx+1}`); document.getElementById(`label-spec-${idx+1}`).innerText = config.specs[idx]; document.getElementById(`max-spec-${idx+1}`).innerText = maxVal; if (parseInt(slider.value) > maxVal) slider.value = maxVal; const percentage = maxVal; slider.style.background = `linear-gradient(to right, rgba(255, 255, 255, 0.2) ${percentage}%, #111 ${percentage}%)`; slider.dataset.maxLimit = maxVal; }); document.getElementById('product-price').value = config.defaultPrice; updateProductStats(); }
+    function switchTechTab(role) { gameState.techTabRole = role; document.querySelectorAll('#tech-tabs .tab-btn').forEach(b => b.classList.remove('active')); document.getElementById('ttab-' + role).classList.add('active'); renderTechTree(role); }
+    function renderTechTree(role) { const container = document.getElementById('tech-content'); const techState = gameState.tech[role]; const config = tierConfig[role]; if (!techState.unlocked) { container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center"><div class="text-gray-400 mb-4">该产业链尚未涉足。</div><button class="bg-green-700 hover:bg-green-600 text-white font-bold py-3 px-8 rounded border border-green-500" onclick="unlockSector('${role}')">成立研发机构<br><span class="text-xs font-normal">$${config.unlockCost}</span></button></div>`; return; } let html = `<div class="mb-4 text-xs text-green-400">当前产业分部: 运行中</div>`; config.specs.forEach((specName, specIdx) => { const treeData = config.techTree[specIdx]; const currentLevel = techState.specs[specIdx].level; html += `<div class="tech-row"><div class="tech-label">${specName}<br><span class="text-[11px] text-gray-600">${treeData.name}</span></div><div class="tech-track">`; treeData.nodes.forEach((nodeName, nodeIdx) => { const caps = [20, 50, 70, 100]; let stateClass = "locked"; if (nodeIdx <= currentLevel) stateClass = "unlocked"; else if (nodeIdx === currentLevel + 1) stateClass = "next-unlock"; const isSelected = gameState.selectedTechNode && gameState.selectedTechNode.role === role && gameState.selectedTechNode.specIdx === specIdx && gameState.selectedTechNode.nodeIdx === nodeIdx; if (isSelected) stateClass += " selected-node"; html += `<div class="tech-node-btn ${stateClass}" onclick="selectTechNode('${role}', ${specIdx}, ${nodeIdx})" title="${nodeName}"><span class="name">${nodeName}</span>${stateClass === 'unlocked' ? `<span class="node-cap">Lv.${caps[nodeIdx]}</span>` : ''}</div>`; }); html += `</div></div>`; }); container.innerHTML = html; }
+    function selectTechNode(role, specIdx, nodeIdx) { gameState.selectedTechNode = { role, specIdx, nodeIdx }; renderTechTree(role); const treeData = tierConfig[role].techTree[specIdx]; const cost = treeData.costs[nodeIdx]; const currentLevel = gameState.tech[role].specs[specIdx].level; const panel = document.getElementById('tech-detail-panel'); let actionHtml = ""; if (nodeIdx <= currentLevel) actionHtml = `<div class="text-green-500 font-bold border border-green-500 px-3 py-1 rounded text-sm">已掌握 / MASTERED</div>`; else if (nodeIdx === currentLevel + 1) actionHtml = `<div class="flex flex-col items-end"><div class="text-yellow-400 text-sm mb-1">研发费用: $${cost}</div><button class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold py-1 px-4 rounded border border-green-500" onclick="executePurchaseTech('${role}', ${specIdx}, ${nodeIdx}, ${cost})">立即研发</button></div>`; else actionHtml = `<div class="text-gray-600 text-sm border border-gray-700 px-3 py-1 rounded">需前置科技 / LOCKED</div>`; panel.innerHTML = `<div class="flex justify-between items-start w-full"><div class="flex-1 pr-4"><div class="text-white font-bold text-sm mb-1">${treeData.nodes[nodeIdx]} <span class="text-[10px] text-green-400 bg-green-900/30 px-1 rounded">上限 Lv.${[20,50,70,100][nodeIdx]}</span></div><div class="text-sm text-gray-300 leading-relaxed">${treeData.descs[nodeIdx]}</div></div>${actionHtml}</div>`; }
+    function executePurchaseTech(role, specIdx, nodeIdx, cost) { 
+        const bonus = getRegionBonus(role);
+        const finalCost = cost * bonus.rdFactor; 
+        if (spendCash(finalCost)) { gameState.tech[role].specs[specIdx].level = nodeIdx; selectTechNode(role, specIdx, nodeIdx); if (document.getElementById('product-window').classList.contains('open') && gameState.currentTabRole === role) updateProductUI(role); } 
+    }
+    function unlockSector(role) { if (spendCash(tierConfig[role].unlockCost)) { gameState.tech[role].unlocked = true; document.getElementById('tech-window').classList.remove('open'); enterBranchPlacementMode(role); } }
+    function enterBranchPlacementMode(role) { gameState.placingBranch = role; gameState.step = 'branch_placement'; document.body.classList.add('branch-mode'); document.getElementById('hint-type').innerText = tierConfig[role].short + "分部"; document.getElementById('hint-region-name').innerText = "全球"; document.getElementById('placement-hint').style.display = 'block'; }
+
+    const width = window.innerWidth; const height = window.innerHeight; const svg = d3.select("#map-container").append("svg").attr("width", "100%").attr("height", "100%").attr("viewBox", `0 0 ${width} ${height}`); const g = svg.append("g"); const projection = d3.geoNaturalEarth1().scale(width / 5.5).translate([width / 2, height / 2]); const path = d3.geoPath().projection(projection); const zoom = d3.zoom().scaleExtent([1, 8]).on("zoom", (e) => g.attr("transform", e.transform)); svg.call(zoom); let worldDataGlobal, countriesGlobal, idToRegionGlobal; const tooltip = d3.select("#tooltip");
+    Promise.all([d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"), d3.json("https://raw.githubusercontent.com/lukes/ISO-3166-Countries-with-Regional-Codes/master/all/all.json")]).then(([world, regionData]) => { d3.select("#loading").style("display", "none"); worldDataGlobal = world; countriesGlobal = world.objects.countries; idToRegionGlobal = {}; regionData.forEach(d => { let r = d.region; if (r === "Americas") { if (d["sub-region"] === "Northern America") { r = "North America"; } else if (d["sub-region"] === "Latin America and the Caribbean") { if (d["intermediate-region"] === "South America") r = "South America"; else r = "North America"; } } idToRegionGlobal[d["country-code"].padStart(3, "0")] = r; idToRegionGlobal[parseInt(d["country-code"])] = r; }); idToRegionGlobal["010"] = "Antarctica"; idToRegionGlobal["304"] = "North America"; drawMap(); drawMapObjects(); });
+    function drawMap() { const regions = ["North America", "South America", "Europe", "Africa", "Asia", "Oceania", "Antarctica"]; regions.forEach(r => { const merged = topojson.merge(worldDataGlobal, countriesGlobal.geometries.filter(d => { const m = idToRegionGlobal[d.id]; return m === "Americas" ? r === "North America" : m === r; })); merged.regionName = r; g.append("path").datum(merged).attr("class", "region").attr("d", path).attr("fill", "#ccc").on("click", (e, d) => handleMapClick(e, d)).on("mouseover", function(e, d) { if (gameState.step !== 'playing') d3.select(this).style("fill-opacity", 0.4); }).on("mouseout", function() { if (gameState.step === 'playing') d3.select(this).transition().duration(500).style("fill-opacity", 0.15); else updateMapStyles(); }); }); g.append("path").datum(d3.geoGraticule()()).attr("d", path).attr("fill", "none").attr("stroke", "var(--primary-green)").attr("stroke-width", 0.5).attr("stroke-opacity", 0.05).style("pointer-events", "none"); }
+    function handleMapClick(event, d) { const transform = d3.zoomTransform(svg.node()); const coords = projection.invert(transform.invert(d3.pointer(event, svg.node()))); if (gameState.step === 'placement') { if (d.regionName === gameState.player.region) startGame(coords); else { document.getElementById('placement-hint').classList.add('animate-bounce'); setTimeout(() => document.getElementById('placement-hint').classList.remove('animate-bounce'), 500); } } else if (gameState.step === 'branch_placement') { gameState.branches.push({ role: gameState.placingBranch, coords: coords, regionName: d.regionName }); drawMapObjects(); gameState.step = 'playing'; document.getElementById('placement-hint').style.display = 'none'; document.body.classList.remove('branch-mode'); toggleTechWindow(); renderTechTree(gameState.placingBranch); } }
+    function updateMapStyles() { const colors = { "North America": "#00eaff", "South America": "#00ff88", "Europe": "#b48eff", "Africa": "#ffae00", "Asia": "#ff3366", "Oceania": "#00ccff", "Antarctica": "#5e737d" }; g.selectAll(".region").attr("fill", d => colors[d.regionName]).classed("target-region", d => d && d.regionName === gameState.player.region && gameState.step === 'placement'); }
+    function drawMapObjects() { 
+        g.selectAll(".tech-group").remove(); g.selectAll(".player-group").remove(); 
+        const compNodes = g.selectAll(".tech-group").data(techCompanies).enter().append("g").attr("class", "tech-group").attr("transform", d => `translate(${projection(d.coords)[0]}, ${projection(d.coords)[1]})`).filter(d => projection(d.coords));
+        compNodes.each(function(d) { 
+            const roleConfig = tierConfig[d.role];
+            if (roleConfig && roleConfig.topComp.acquired) return; 
+            
+            // === Tooltip Content Generation ===
+            const comp = roleConfig.topComp;
+            d.tooltipHtml = `
+                <div class="border-b border-red-800 pb-1 mb-2 flex justify-between items-end">
+                    <span class="font-bold text-white text-base">${d.name.toUpperCase()}</span>
+                    <span class="text-[10px] text-red-400 border border-red-500 px-1 rounded">RIVAL</span>
+                </div>
+                <div class="text-xs text-gray-300 mb-1"><span class="text-gray-500">SECTOR:</span> ${roleConfig.short}</div>
+                <div class="text-xs text-gray-300 mb-1"><span class="text-gray-500">FLAGSHIP:</span> ${comp.flagship}</div>
+                <div class="text-xs text-gray-300 mb-2"><span class="text-gray-500">MARKET SHARE:</span> <span class="text-white font-bold">${comp.share}%</span></div>
+                <div class="text-[10px] text-gray-400 italic border-t border-gray-800 pt-1 mt-1 leading-tight">
+                    "行业领军者，拥有极高的技术壁垒与市场话语权。"
+                </div>
+            `;
+
+            d3.select(this).append("circle").attr("class", "tech-node-pulse competitor-node-pulse").attr("r", 2).style("animation-delay", () => Math.random()*2+"s");
+            d3.select(this).append("circle").attr("class", "tech-node-circle competitor-node-circle").attr("r", 4).on("mouseover", (e, dd) => showTooltip(e, dd.tooltipHtml)).on("mousemove", moveTooltip).on("mouseout", hideTooltip);
+        });
+        const playerNodes = g.selectAll(".player-group").data(gameState.branches).enter().append("g").attr("class", "player-group").attr("transform", d => `translate(${projection(d.coords)[0]}, ${projection(d.coords)[1]})`);
+        playerNodes.append("circle").attr("class", d => d.role === gameState.player.role ? "tech-node-pulse player-node-pulse" : "tech-node-pulse branch-node-pulse").attr("r", 2);
+        
+        const playerTooltip = (d) => `
+            <div class="border-b border-green-800 pb-1 mb-1 font-bold text-white">${gameState.player.name.toUpperCase()}</div>
+            <div class="text-[10px] bg-green-900 text-green-300 inline-block px-1 mb-1">${d.role === gameState.player.role ? "GLOBAL HQ" : `${tierConfig[d.role].short} BRANCH`}</div>
+            <div class="text-xs text-gray-300">${d.role === gameState.player.role ? "公司全球指挥中心" : `专注于 ${tierConfig[d.role].short} 的研发与生产中心`}</div>
+        `;
+
+        playerNodes.append("circle").attr("class", d => d.role === gameState.player.role ? "tech-node-circle player-node-circle" : "tech-node-circle branch-node-circle").attr("r", 6).on("mouseover", (e, d) => showTooltip(e, playerTooltip(d))).on("mousemove", moveTooltip).on("mouseout", hideTooltip);
+    }
+    function showTooltip(e, content) { tooltip.style("opacity", 1).html(content); }
+    function moveTooltip(e) { tooltip.style("left", (e.pageX+20)+"px").style("top", (e.pageY-20)+"px"); }
+    function hideTooltip() { tooltip.style("opacity", 0); }
+    window.addEventListener("resize", () => svg.attr("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`));
+    </script>
+
 </body>
 </html>
