@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Dungeon: Block & Blade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            background-color: #1a1a2e;
+            font-family: 'Press Start 2P', monospace; 
+            color: #e94560;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .pixel-borders {
+            box-shadow: 
+                -4px 0 0 0 white,
+                4px 0 0 0 white,
+                0 -4px 0 0 white,
+                0 4px 0 0 white;
+            margin: 4px;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            filter: blur(5px); /* Initially blurred for menu */
+            transition: filter 0.5s;
+        }
+
+        @media (min-width: 768px) {
+            .game-container {
+                flex-direction: row;
+                gap: 2rem;
+            }
+        }
+
+        canvas {
+            background-color: #0f3460;
+            border: 4px solid #16213e;
+        }
+
+        .battle-screen {
+            width: 300px;
+            height: 400px;
+            background: #16213e;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            margin-bottom: 5px;
+            border: 2px solid white;
+            position: relative;
+        }
+
+        .hp-bar {
+            height: 100%;
+            background: #e94560;
+            width: 100%;
+            transition: width 0.3s;
+        }
+        
+        .enemy-hp-bar {
+            background: #8e44ad;
+        }
+
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .damage-text {
+            position: absolute;
+            color: yellow;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px #000;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        }
+
+        .entity {
+            font-size: 60px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .hero { color: #4ade80; }
+        .enemy { color: #f43f5e; }
+        .attack-anim { transform: scale(1.5); }
+        .hit-anim { filter: brightness(5) sepia(1) hue-rotate(-50deg) saturate(5); }
+
+        .mobile-controls {
+            display: none;
+            width: 100%;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        @media (max-width: 768px) {
+            .mobile-controls { display: flex; }
+            .battle-screen { height: 180px; width: 90vw; margin-bottom: 10px; }
+            .entity { font-size: 40px; }
+            canvas { height: 50vh; width: auto; }
+        }
+
+        .btn {
+            background: #333;
+            color: white;
+            border: 2px solid white;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            min-width: 60px;
+            text-align: center;
+            user-select: none;
+            cursor: pointer;
+        }
+        .btn:active { background: #555; }
+        .btn:hover { background: #444; }
+
+        /* Overlays */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            text-align: center;
+        }
+
+        .menu-title {
+            font-size: 3rem;
+            color: #e94560;
+            text-shadow: 4px 4px #000;
+            margin-bottom: 2rem;
+            line-height: 1.2;
+        }
+        
+        .menu-btn {
+            font-size: 1.2rem;
+            padding: 1rem 2rem;
+            margin: 0.5rem;
+            width: 250px;
+            transition: transform 0.1s;
+        }
+        .menu-btn:hover { transform: scale(1.05); }
+
+        .help-box {
+            background: #16213e;
+            border: 4px solid white;
+            padding: 1.5rem;
+            max-width: 80%;
+            text-align: left;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .key-badge {
+            background: #333;
+            padding: 2px 6px;
+            border: 1px solid #666;
+            color: #4ade80;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="start-screen" class="overlay">
+    <h1 class="menu-title">TETRIS<br>DUNGEON</h1>
+    
+    <div id="help-content" class="help-box">
+        <h3 class="text-xl text-yellow-400 mb-2">HOW TO PLAY</h3>
+        <p>⚔️ <span class="text-green-400">消除行数</span> 攻击敌人</p>
+        <p>🛡️ <span class="text-red-400">快速消除</span> 防止被攻击</p>
+        <p>⚡ <span class="text-yellow-400">一次消除4行</span> 造成暴击!</p>
+        <br>
+        <p>🎮 CONTROLS:</p>
+        <p>⬅️ ➡️ 移动 | ⬆️ 旋转 | ⬇️ 加速</p>
+        <p><span class="key-badge">SPACE</span> 直接下落</p>
+    </div>
+
+    <button onclick="startGame()" class="btn menu-btn">⚔️ START GAME</button>
+    <button onclick="toggleHelp()" class="btn menu-btn">📜 HELP</button>
+</div>
+
+<!-- Game Over Overlay -->
+<div id="game-over-overlay" class="overlay hidden">
+    <h1 class="text-4xl mb-4 text-red-500">YOU DIED</h1>
+    <p id="end-reason" class="mb-8 text-white text-sm">Reason</p>
+    <p id="final-score" class="mb-8 text-white text-xl">Score: 0</p>
+    <button onclick="location.reload()" class="btn menu-btn">TRY AGAIN</button>
+</div>
+
+<!-- Main Game UI -->
+<div id="game-ui" class="game-container">
+    <!-- Battle Section -->
+    <div class="battle-screen pixel-borders">
+        <div>
+            <div class="flex justify-between text-xs mb-1">
+                <span id="enemy-name">SLIME</span>
+                <span>LVL <span id="level">1</span></span>
+            </div>
+            <div class="bar-container">
+                <div id="enemy-hp" class="hp-bar enemy-hp-bar"></div>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center px-4 h-full relative" id="battle-stage">
+            <div id="hero-sprite" class="entity hero">🧙‍♂️</div>
+            <div id="vs-text" class="text-sm text-gray-500">VS</div>
+            <div id="enemy-sprite" class="entity enemy">🦠</div>
+        </div>
+
+        <div>
+            <div class="bar-container">
+                <div id="hero-hp" class="hp-bar"></div>
+            </div>
+            <div class="flex justify-between text-xs mt-1">
+                <span>HP</span>
+                <span id="hero-hp-text">300/300</span>
+            </div>
+            <div class="text-center text-xs mt-2 text-yellow-300" id="status-msg">
+                READY FIGHT!
+            </div>
+        </div>
+    </div>
+
+    <!-- Tetris Section -->
+    <div class="relative">
+        <canvas id="tetris" width="240" height="400"></canvas>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls">
+        <div class="w-full flex justify-center gap-2 mb-2">
+            <button class="btn" id="btn-rotate">↻ ROTATE</button>
+            <button class="btn" id="btn-drop">⬇ DROP</button>
+        </div>
+        <div class="w-full flex justify-center gap-2">
+            <button class="btn" id="btn-left">⬅ LEFT</button>
+            <button class="btn" id="btn-down">⬇ SLOW</button>
+            <button class="btn" id="btn-right">RIGHT ➡</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * AUDIO SYSTEM (Retro Synth)
+ */
+class RetroAudio {
+    constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        this.tempo = 150; // BPM
+        this.noteTime = 0;
+    }
+
+    init() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    playTone(freq, duration, type = 'square', vol = 0.1) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    startBGM() {
+        if (this.isPlaying) return;
+        this.init();
+        this.isPlaying = true;
+        this.loop();
+    }
+
+    loop() {
+        if (!this.isPlaying) return;
+
+        // Simple Arpeggio: Cm - Gm - Fm - G7
+        const sequence = [
+            // Cm
+            [261.63, 0.2], [311.13, 0.2], [392.00, 0.2], [523.25, 0.2],
+            [392.00, 0.2], [311.13, 0.2], [261.63, 0.4],
+            // Gm
+            [196.00, 0.2], [233.08, 0.2], [293.66, 0.2], [392.00, 0.2],
+            [293.66, 0.2], [233.08, 0.2], [196.00, 0.4],
+            // Fm
+            [174.61, 0.2], [207.65, 0.2], [261.63, 0.2], [349.23, 0.2],
+            [261.63, 0.2], [207.65, 0.2], [174.61, 0.4],
+            // G7 (tension)
+            [196.00, 0.2], [246.94, 0.2], [293.66, 0.2], [349.23, 0.2],
+            [392.00, 0.2], [293.66, 0.2], [196.00, 0.4] 
+        ];
+
+        let timeOffset = 0;
+        sequence.forEach(([freq, dur]) => {
+            setTimeout(() => {
+                if(this.isPlaying) this.playTone(freq, dur, 'square', 0.05);
+                // Bass line
+                if(this.isPlaying && Math.random() > 0.5) this.playTone(freq / 2, dur, 'sawtooth', 0.03);
+            }, timeOffset * 1000);
+            timeOffset += dur;
+        });
+
+        setTimeout(() => this.loop(), timeOffset * 1000);
+    }
+
+    playSFX(type) {
+        if (!this.ctx) return;
+        if (type === 'move') this.playTone(150, 0.05, 'triangle', 0.05);
+        if (type === 'rotate') this.playTone(200, 0.1, 'sine', 0.05);
+        if (type === 'drop') this.playTone(100, 0.2, 'square', 0.1);
+        if (type === 'attack') {
+            this.playTone(400, 0.1, 'sawtooth', 0.1);
+            setTimeout(() => this.playTone(600, 0.2, 'sawtooth', 0.1), 100);
+        }
+        if (type === 'damage') {
+            this.playTone(100, 0.3, 'sawtooth', 0.2);
+            this.playTone(80, 0.3, 'square', 0.2);
+        }
+    }
+}
+
+const audio = new RetroAudio();
+
+/**
+ * GAME STATE
+ */
+let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+
+function toggleHelp() {
+    const help = document.getElementById('help-content');
+    help.style.display = help.style.display === 'block' ? 'none' : 'block';
+}
+
+function startGame() {
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-ui').style.filter = 'none';
+    gameState = 'PLAYING';
+    audio.startBGM();
+    
+    // Reset Logic
+    resetGame();
+    loop();
+}
+
+/**
+ * TETRIS LOGIC
+ */
+const canvas = document.getElementById('tetris');
+const context = canvas.getContext('2d');
+const grid = 20;
+const COLS = 12;
+const ROWS = 20;
+context.scale(1, 1);
+
+const tetrominos = {
+    'I': [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]],
+    'J': [[1,0,0], [1,1,1], [0,0,0]],
+    'L': [[0,0,1], [1,1,1], [0,0,0]],
+    'O': [[1,1], [1,1]],
+    'S': [[0,1,1], [1,1,0], [0,0,0]],
+    'Z': [[1,1,0], [0,1,1], [0,0,0]],
+    'T': [[0,1,0], [1,1,1], [0,0,0]]
+};
+
+const colors = {
+    'I': '#00f0f0', 'O': '#f0f000', 'T': '#a000f0',
+    'S': '#00f000', 'Z': '#f00000', 'J': '#0000f0', 'L': '#f0a000'
+};
+
+let board = [];
+let tetrominoSequence = [];
+let currentTetromino = null;
+
+function resetGame() {
+    board = [];
+    for (let r = 0; r < ROWS; r++) {
+        board[r] = new Array(COLS).fill(0);
+    }
+    tetrominoSequence = [];
+    currentTetromino = getNextTetromino();
+    battleSystem.reset();
+}
+
+function generateSequence() {
+    const sequence = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+    while (sequence.length) {
+        const rand = Math.floor(Math.random() * sequence.length);
+        const name = sequence.splice(rand, 1)[0];
+        tetrominoSequence.push(name);
+    }
+}
+
+function getNextTetromino() {
+    if (tetrominoSequence.length === 0) generateSequence();
+    const name = tetrominoSequence.pop();
+    const matrix = tetrominos[name];
+    const col = Math.floor(COLS / 2) - Math.ceil(matrix[0].length / 2);
+    const row = name === 'I' ? -1 : 0;
+    return { name, matrix, row, col };
+}
+
+function rotate(matrix) {
+    const N = matrix.length - 1;
+    return matrix.map((row, i) => row.map((val, j) => matrix[N - j][i]));
+}
+
+function isValidMove(matrix, cellRow, cellCol) {
+    for (let row = 0; row < matrix.length; row++) {
+        for (let col = 0; col < matrix[row].length; col++) {
+            if (matrix[row][col] && (
+                cellCol + col < 0 ||
+                cellCol + col >= COLS ||
+                cellRow + row >= ROWS ||
+                (cellRow + row >= 0 && board[cellRow + row][cellCol + col])
+            )) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+function placeTetromino() {
+    audio.playSFX('drop');
+    for (let row = 0; row < currentTetromino.matrix.length; row++) {
+        for (let col = 0; col < currentTetromino.matrix[row].length; col++) {
+            if (currentTetromino.matrix[row][col]) {
+                if (currentTetromino.row + row < 0) {
+                    return showGameOver("Block Overflow!");
+                }
+                board[currentTetromino.row + row][currentTetromino.col + col] = currentTetromino.name;
+            }
+        }
+    }
+
+    let linesCleared = 0;
+    for (let row = ROWS - 1; row >= 0; ) {
+        if (board[row].every(cell => !!cell)) {
+            linesCleared++;
+            board.splice(row, 1);
+            board.unshift(new Array(COLS).fill(0));
+        } else {
+            row--;
+        }
+    }
+
+    if (linesCleared > 0) {
+        battleSystem.playerAttack(linesCleared);
+    }
+
+    currentTetromino = getNextTetromino();
+}
+
+/**
+ * BATTLE SYSTEM
+ */
+const enemies = [
+    { name: "SLIME", hp: 30, maxHp: 30, attack: 5, speed: 4000, sprite: "🦠" },
+    { name: "BAT", hp: 50, maxHp: 50, attack: 8, speed: 3500, sprite: "🦇" },
+    { name: "SKELETON", hp: 80, maxHp: 80, attack: 12, speed: 3000, sprite: "💀" },
+    { name: "DRAGON", hp: 200, maxHp: 200, attack: 20, speed: 2500, sprite: "🐉" },
+    { name: "DEMON", hp: 500, maxHp: 500, attack: 30, speed: 2000, sprite: "👹" }
+];
+
+class BattleSystem {
+    constructor() {
+        this.baseMaxHp = 300; // Increased HP
+        this.heroMaxHp = this.baseMaxHp;
+        this.heroHp = this.baseMaxHp;
+        this.ui = {
+            enemyName: document.getElementById('enemy-name'),
+            enemyHpBar: document.getElementById('enemy-hp'),
+            heroHpBar: document.getElementById('hero-hp'),
+            heroHpText: document.getElementById('hero-hp-text'),
+            heroSprite: document.getElementById('hero-sprite'),
+            enemySprite: document.getElementById('enemy-sprite'),
+            statusMsg: document.getElementById('status-msg'),
+            level: document.getElementById('level')
+        };
+    }
+
+    reset() {
+        this.level = 0;
+        this.score = 0;
+        this.heroMaxHp = this.baseMaxHp;
+        this.heroHp = this.heroMaxHp;
+        this.loadEnemy(0);
+        this.updateUI();
+    }
+
+    loadEnemy(index) {
+        if (index >= enemies.length) index = enemies.length - 1;
+        const template = enemies[index];
+        this.enemy = { ...template };
+        
+        if (this.level >= enemies.length) {
+            this.enemy.maxHp = Math.floor(this.enemy.maxHp * (1 + (this.level * 0.1)));
+            this.enemy.hp = this.enemy.maxHp;
+            this.enemy.attack = Math.floor(this.enemy.attack * 1.2);
+        }
+
+        this.lastEnemyAttackTime = performance.now(); // Reset timer
+        this.updateUI();
+        this.ui.enemySprite.innerText = this.enemy.sprite;
+        this.ui.enemyName.innerText = this.enemy.name;
+        this.ui.statusMsg.innerText = `A wild ${this.enemy.name} appears!`;
+        this.ui.statusMsg.style.color = "#yellow";
+    }
+
+    update(timestamp) {
+        if (gameState !== 'PLAYING') return;
+        if (timestamp - this.lastEnemyAttackTime > this.enemy.speed) {
+            this.enemyAttack();
+            this.lastEnemyAttackTime = timestamp;
+        }
+    }
+
+    playerAttack(lines) {
+        audio.playSFX('attack');
+        let damage = 0;
+        let msg = "";
+        
+        switch(lines) {
+            case 1: damage = 10; msg = "HIT!"; break;
+            case 2: damage = 30; msg = "DOUBLE!"; break;
+            case 3: damage = 60; msg = "TRIPLE!"; break;
+            case 4: damage = 120; msg = "CRITICAL!!"; break;
+        }
+
+        this.score += damage;
+        this.showFloatingText(damage, 'enemy-sprite');
+        this.anim(this.ui.heroSprite, 'attack-anim', 200);
+        this.anim(this.ui.enemySprite, 'hit-anim shake', 500);
+
+        this.ui.statusMsg.innerText = `${msg} -${damage} HP`;
+        this.ui.statusMsg.style.color = "#4ade80";
+
+        this.enemy.hp -= damage;
+        if (this.enemy.hp <= 0) {
+            this.enemy.hp = 0;
+            this.levelUp();
+        }
+        this.updateUI();
+    }
+
+    enemyAttack() {
+        audio.playSFX('damage');
+        const damage = this.enemy.attack;
+        this.heroHp -= damage;
+        
+        this.showFloatingText(`-${damage}`, 'hero-sprite', 'red');
+        this.anim(this.ui.enemySprite, 'attack-anim', 200);
+        this.anim(this.ui.heroSprite, 'hit-anim shake', 500);
+        
+        this.ui.statusMsg.innerText = `Ouch! Took ${damage} DMG`;
+        this.ui.statusMsg.style.color = "#f43f5e";
+
+        if (this.heroHp <= 0) {
+            this.heroHp = 0;
+            showGameOver("Killed by " + this.enemy.name);
+        }
+        this.updateUI();
+    }
+
+    levelUp() {
+        this.level++;
+        // Heal nicely
+        const heal = 100;
+        this.heroHp = Math.min(this.heroMaxHp, this.heroHp + heal);
+        this.showFloatingText(`+${heal} HP`, 'hero-sprite', '#4ade80');
+        
+        this.ui.statusMsg.innerText = "ENEMY DEFEATED!";
+        
+        setTimeout(() => {
+            this.loadEnemy(this.level);
+        }, 1000);
+    }
+
+    updateUI() {
+        const enemyPct = (this.enemy.hp / this.enemy.maxHp) * 100;
+        this.ui.enemyHpBar.style.width = `${enemyPct}%`;
+
+        const heroPct = (this.heroHp / this.heroMaxHp) * 100;
+        this.ui.heroHpBar.style.width = `${heroPct}%`;
+        this.ui.heroHpText.innerText = `${this.heroHp}/${this.heroMaxHp}`;
+        
+        this.ui.level.innerText = this.level + 1;
+    }
+
+    showFloatingText(text, targetId, color = 'yellow') {
+        const stage = document.getElementById('battle-stage');
+        const el = document.createElement('div');
+        el.className = 'damage-text';
+        el.innerText = text;
+        el.style.color = color;
+        el.style.left = (targetId === 'hero-sprite' ? '20%' : '70%');
+        el.style.top = '30%';
+        stage.appendChild(el);
+        setTimeout(() => el.remove(), 1000);
+    }
+
+    anim(el, classes, duration) {
+        const clsList = classes.split(' ');
+        el.classList.add(...clsList);
+        setTimeout(() => el.classList.remove(...clsList), duration);
+    }
+}
+
+/**
+ * MAIN LOOP
+ */
+let count = 0;
+let rAF = null;
+const battleSystem = new BattleSystem();
+let dropSpeed = 35; 
+
+function loop(timestamp) {
+    if (gameState === 'PLAYING') {
+        rAF = requestAnimationFrame(loop);
+        
+        if (typeof timestamp === 'undefined') timestamp = performance.now();
+        battleSystem.update(timestamp);
+
+        if (++count > dropSpeed) {
+            currentTetromino.row++;
+            count = 0;
+            if (!isValidMove(currentTetromino.matrix, currentTetromino.row, currentTetromino.col)) {
+                currentTetromino.row--;
+                placeTetromino();
+            }
+        }
+
+        draw();
+    }
+}
+
+function draw() {
+    context.fillStyle = '#0f3460';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Board
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (board[r][c]) {
+                drawBlock(c, r, colors[board[r][c]]);
+            }
+        }
+    }
+
+    // Ghost
+    if (currentTetromino) {
+        let ghostRow = currentTetromino.row;
+        while (isValidMove(currentTetromino.matrix, ghostRow + 1, currentTetromino.col)) ghostRow++;
+        
+        if(ghostRow > currentTetromino.row) {
+            context.globalAlpha = 0.2;
+            for (let r = 0; r < currentTetromino.matrix.length; r++) {
+                for (let c = 0; c < currentTetromino.matrix[r].length; c++) {
+                    if (currentTetromino.matrix[r][c]) {
+                        drawBlock(currentTetromino.col + c, ghostRow + r, colors[currentTetromino.name]);
+                    }
+                }
+            }
+            context.globalAlpha = 1.0;
+        }
+
+        // Active Piece
+        for (let r = 0; r < currentTetromino.matrix.length; r++) {
+            for (let c = 0; c < currentTetromino.matrix[r].length; c++) {
+                if (currentTetromino.matrix[r][c]) {
+                    drawBlock(currentTetromino.col + c, currentTetromino.row + r, colors[currentTetromino.name]);
+                }
+            }
+        }
+    }
+}
+
+function drawBlock(x, y, color) {
+    context.fillStyle = color;
+    context.fillRect(x * grid, y * grid, grid-1, grid-1);
+    context.fillStyle = 'rgba(255,255,255,0.3)';
+    context.fillRect(x * grid, y * grid, grid-1, 4);
+    context.fillRect(x * grid, y * grid, 4, grid-1);
+}
+
+function showGameOver(reason) {
+    gameState = 'GAMEOVER';
+    audio.isPlaying = false; // Stop BGM
+    cancelAnimationFrame(rAF);
+    document.getElementById('game-over-overlay').classList.remove('hidden');
+    document.getElementById('end-reason').innerText = reason;
+    document.getElementById('final-score').innerText = `Total Score: ${battleSystem.score}`;
+}
+
+/**
+ * CONTROLS
+ */
+document.addEventListener('keydown', function(e) {
+    if (gameState !== 'PLAYING') return;
+
+    if (e.which === 37 || e.which === 39) { 
+        const col = e.which === 37 ? currentTetromino.col - 1 : currentTetromino.col + 1;
+        if (isValidMove(currentTetromino.matrix, currentTetromino.row, col)) {
+            currentTetromino.col = col;
+            audio.playSFX('move');
+        }
+    }
+
+    if (e.which === 38) { 
+        const matrix = rotate(currentTetromino.matrix);
+        if (isValidMove(matrix, currentTetromino.row, currentTetromino.col)) {
+            currentTetromino.matrix = matrix;
+            audio.playSFX('rotate');
+        }
+    }
+
+    if (e.which === 40) { 
+        const row = currentTetromino.row + 1;
+        if (!isValidMove(currentTetromino.matrix, row, currentTetromino.col)) {
+            placeTetromino();
+        } else {
+            currentTetromino.row = row;
+        }
+    }
+
+    if (e.which === 32) { 
+        e.preventDefault(); 
+        while (isValidMove(currentTetromino.matrix, currentTetromino.row + 1, currentTetromino.col)) {
+            currentTetromino.row++;
+        }
+        placeTetromino();
+    }
+});
+
+// Mobile/Touch Handlers
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+const btnRotate = document.getElementById('btn-rotate');
+const btnDown = document.getElementById('btn-down');
+const btnDrop = document.getElementById('btn-drop');
+
+function handleTouch(action) {
+    if (gameState !== 'PLAYING') return;
+    
+    if (action === 'left' || action === 'right') {
+        const col = action === 'left' ? currentTetromino.col - 1 : currentTetromino.col + 1;
+        if (isValidMove(currentTetromino.matrix, currentTetromino.row, col)) {
+            currentTetromino.col = col;
+            audio.playSFX('move');
+        }
+    } else if (action === 'rotate') {
+        const matrix = rotate(currentTetromino.matrix);
+        if (isValidMove(matrix, currentTetromino.row, currentTetromino.col)) {
+            currentTetromino.matrix = matrix;
+            audio.playSFX('rotate');
+        }
+    } else if (action === 'down') {
+         const row = currentTetromino.row + 1;
+        if (!isValidMove(currentTetromino.matrix, row, currentTetromino.col)) {
+            placeTetromino();
+        } else {
+            currentTetromino.row = row;
+        }
+    } else if (action === 'drop') {
+         while (isValidMove(currentTetromino.matrix, currentTetromino.row + 1, currentTetromino.col)) {
+            currentTetromino.row++;
+        }
+        placeTetromino();
+    }
+}
+
+const addRepeat = (btn, action) => {
+    let interval;
+    const start = (e) => {
+        if(e.cancelable) e.preventDefault();
+        handleTouch(action);
+        interval = setInterval(() => handleTouch(action), 150);
+    };
+    const end = (e) => {
+        if(e.cancelable) e.preventDefault();
+        clearInterval(interval);
+    };
+    btn.addEventListener('touchstart', start, {passive: false});
+    btn.addEventListener('touchend', end);
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('mouseup', end);
+    btn.addEventListener('mouseleave', end);
+};
+
+addRepeat(btnLeft, 'left');
+addRepeat(btnRight, 'right');
+addRepeat(btnDown, 'down');
+
+// Single tap
+const addTap = (btn, action) => {
+    const handler = (e) => {
+        if(e.cancelable) e.preventDefault();
+        handleTouch(action);
+    }
+    btn.addEventListener('touchstart', handler, {passive: false});
+    btn.addEventListener('click', handler);
+}
+
+addTap(btnRotate, 'rotate');
+addTap(btnDrop, 'drop');
+
+</script>
+</body>
+</html>
