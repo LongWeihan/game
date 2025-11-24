@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>霓虹战斗贪吃蛇 - 狂热版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
+            border: 2px solid #333;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+        }
+
+        .ui-overlay {
+            position: absolute;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            z-index: 10;
+        }
+
+        .hud-text {
+            text-shadow: 0 0 10px currentColor;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        /* Virtual Controls */
+        .controls-area {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(3, 60px);
+            gap: 5px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+            user-select: none;
+            transition: all 0.1s;
+        }
+
+        .btn:active {
+            background: rgba(0, 255, 255, 0.3);
+            transform: scale(0.95);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        .action-group {
+            display: flex;
+            align-items: flex-end;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .shoot-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 50, 50, 0.15);
+            border: 2px solid rgba(255, 50, 50, 0.5);
+            font-size: 1.5rem;
+            color: #ff5555;
+            position: relative;
+        }
+        
+        .shoot-btn:after {
+            content: 'J';
+            position: absolute;
+            bottom: -25px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .shoot-btn:active {
+            background: rgba(255, 50, 50, 0.6);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+        }
+
+        /* Ultimate Button */
+        .ult-btn {
+            width: 70px; /* Bigger */
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(150, 0, 255, 0.15);
+            border: 2px solid rgba(150, 0, 255, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #d0f;
+            position: relative;
+        }
+
+        .ult-btn:after {
+            content: 'K';
+            position: absolute;
+            bottom: -25px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .ult-btn.ready {
+            background: rgba(150, 0, 255, 0.3);
+            box-shadow: 0 0 20px #a0f;
+            color: #fff;
+            border-color: #f0f;
+            animation: pulse-purple 1s infinite alternate;
+        }
+
+        .ult-btn:active {
+            transform: scale(0.9);
+            background: #fff;
+        }
+
+        @keyframes pulse-purple {
+            0% { box-shadow: 0 0 10px #a0f, inset 0 0 10px #a0f; }
+            100% { box-shadow: 0 0 30px #d0f, inset 0 0 20px #d0f; }
+        }
+
+        .grid-up { grid-column: 2; grid-row: 1; }
+        .grid-left { grid-column: 1; grid-row: 2; }
+        .grid-right { grid-column: 3; grid-row: 2; }
+        .grid-down { grid-column: 2; grid-row: 3; }
+
+        @media (min-width: 1024px) {
+            .controls-area {
+                opacity: 0.2; 
+            }
+            .controls-area:hover {
+                opacity: 1;
+            }
+        }
+
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+        }
+
+        .neon-title {
+            font-size: 5rem;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fff, #aaa);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 
+                0 0 10px #0ff,
+                0 0 20px #0ff,
+                0 0 40px #0ff,
+                0 0 80px #0ff;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.1;
+        }
+
+        .neon-btn {
+            position: relative;
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 20px 60px;
+            font-size: 2rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            letter-spacing: 4px;
+            transition: 0.2s;
+            margin-top: 30px;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .neon-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            border: 2px solid #f0f;
+            box-shadow: 0 0 15px #f0f, inset 0 0 15px #f0f;
+            transform: skewX(-20deg);
+            z-index: -1;
+            transition: 0.3s;
+        }
+
+        .neon-btn:hover::before {
+            background: #f0f;
+            box-shadow: 0 0 50px #f0f;
+        }
+
+        .neon-btn:hover {
+            color: #000;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center relative">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div class="ui-overlay">
+        <div class="flex justify-between w-full px-4 pt-4 items-start">
+            <div class="flex flex-col gap-2">
+                <div class="text-cyan-400 hud-text text-2xl">SCORE: <span id="scoreVal">0</span></div>
+                <div class="text-green-400 hud-text text-sm">LENGTH: <span id="lengthVal">3</span></div>
+            </div>
+            
+            <div class="flex flex-col items-end gap-2">
+                <div class="text-red-500 hud-text text-xl flex items-center">
+                    HP 
+                    <div class="w-40 h-5 bg-gray-900 border border-red-600 ml-2 relative skew-x-[-20deg] overflow-hidden">
+                        <div id="hpBar" class="h-full bg-red-600 transition-all duration-100 shadow-[0_0_10px_red]" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="text-purple-400 hud-text text-xl flex items-center">
+                    ULT
+                    <div class="w-40 h-5 bg-gray-900 border border-purple-600 ml-2 relative skew-x-[-20deg] overflow-hidden">
+                        <div id="ultBar" class="h-full bg-purple-500 transition-all duration-100" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen">
+        <h1 class="neon-title">CYBER<br>SNAKE</h1>
+        <div class="flex gap-8 text-gray-300 mb-8 text-xl font-bold">
+            <div class="flex flex-col items-center">
+                <span class="text-cyan-400 text-3xl mb-2">WASD</span>
+                <span>移动</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <span class="text-red-500 text-3xl mb-2">J</span>
+                <span>射击</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <span class="text-purple-500 text-3xl mb-2">K</span>
+                <span>清屏大招</span>
+            </div>
+        </div>
+        <button class="neon-btn" onclick="startGame()">INIT SYSTEM</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="hidden">
+        <h1 class="text-red-600 text-6xl mb-4 font-black" style="text-shadow: 0 0 30px red; letter-spacing: 5px;">SYSTEM FAILURE</h1>
+        <p class="text-white text-2xl mb-8">FINAL SCORE: <span id="finalScore" class="text-cyan-400">0</span></p>
+        <button class="neon-btn" onclick="restartGame()">REBOOT</button>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="controls-area" id="mobileControls">
+        <div class="d-pad">
+            <div class="btn grid-up" data-key="ArrowUp">▲</div>
+            <div class="btn grid-left" data-key="ArrowLeft">◀</div>
+            <div class="btn grid-right" data-key="ArrowRight">▶</div>
+            <div class="btn grid-down" data-key="ArrowDown">▼</div>
+        </div>
+        <div class="action-group">
+            <div class="ult-btn btn" id="ultBtnMobile" data-key="k">⚡</div>
+            <div class="btn shoot-btn" data-key="j">💣</div>
+        </div>
+    </div>
+
+<script>
+    /**
+     * Game Configuration & State
+     */
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Elements
+    const scoreEl = document.getElementById('scoreVal');
+    const lengthEl = document.getElementById('lengthVal');
+    const hpBar = document.getElementById('hpBar');
+    const ultBar = document.getElementById('ultBar');
+    const ultBtnMobile = document.getElementById('ultBtnMobile');
+    const finalScoreEl = document.getElementById('finalScore');
+    const startScreen = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+
+    // Config
+    const CELL_SIZE = 25;
+    let GRID_W, GRID_H;
+    const MAX_HP = 100;
+    const ULT_COOLDOWN_MAX = 400; // slightly longer cooldown for op skill
+    
+    // Game State
+    let animationId;
+    let lastTime = 0;
+    let score = 0;
+    let gameState = 'MENU';
+    let frames = 0;
+    let screenShake = 0;
+
+    // Entities
+    let snake = [];
+    let direction = { x: 0, y: 0 };
+    let nextDirection = { x: 0, y: 0 };
+    let bullets = [];
+    let enemies = [];
+    let particles = [];
+    let food = null;
+    let playerHP = MAX_HP;
+    let ultTimer = 0;
+
+    /**
+     * AUDIO ENGINE (Synthesizer)
+     */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let bgmInterval = null;
+
+    // Instruments
+    function playKick(time) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(time);
+        osc.stop(time + 0.5);
+    }
+
+    function playSnare(time) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        // Noise burst approximation using high triangle
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(100, time);
+        gain.gain.setValueAtTime(0.2, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+        
+        // Add some noise (randomness is hard in pure oscillator, skipping for simplicity but adding high freq)
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(800, time);
+        osc2.frequency.exponentialRampToValueAtTime(200, time + 0.1);
+        const gain2 = audioCtx.createGain();
+        gain2.gain.setValueAtTime(0.1, time);
+        gain2.gain.linearRampToValueAtTime(0, time + 0.1);
+
+        osc.connect(gain);
+        osc2.connect(gain2);
+        gain.connect(audioCtx.destination);
+        gain2.connect(audioCtx.destination);
+        
+        osc.start(time);
+        osc.stop(time + 0.2);
+        osc2.start(time);
+        osc2.stop(time + 0.2);
+    }
+
+    function playBass(time, note) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        
+        osc.type = 'sawtooth';
+        // Simple bass progression
+        const freq = [55, 55, 65.41, 49].at(Math.floor(note/4) % 4) || 55; // A1, A1, C2, G1
+        
+        osc.frequency.setValueAtTime(freq, time);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, time);
+        filter.frequency.exponentialRampToValueAtTime(100, time + 0.3);
+        
+        gain.gain.setValueAtTime(0.2, time);
+        gain.gain.linearRampToValueAtTime(0, time + 0.3);
+        
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(time);
+        osc.stop(time + 0.4);
+    }
+
+    function playHiHat(time) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(8000, time);
+        gain.gain.setValueAtTime(0.05, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+        osc.connect(gain); // Highpass would be better but keeping simple
+        gain.connect(audioCtx.destination);
+        osc.start(time);
+        osc.stop(time + 0.05);
+    }
+
+    // BGM Sequencer
+    function startMusic() {
+        if (bgmInterval) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const tempo = 140; // BPM (Fast & Fiery)
+        const stepTime = (60 / tempo) * 1000 / 4; // 16th notes
+        let step = 0;
+        let nextNoteTime = audioCtx.currentTime;
+
+        // Pre-schedule logic
+        bgmInterval = setInterval(() => {
+            const now = audioCtx.currentTime;
+            // Schedule ahead
+            while (nextNoteTime < now + 0.1) {
+                // Kick: 1, 5, 9, 13
+                if (step % 4 === 0) playKick(nextNoteTime);
+                
+                // Snare: 5, 13
+                if (step % 8 === 4) playSnare(nextNoteTime);
+                
+                // Bass: Off-beat driving 
+                if (step % 2 === 0) playBass(nextNoteTime, step/4);
+
+                // Hi-hat: every 2 steps
+                if (step % 2 === 0) playHiHat(nextNoteTime);
+                
+                nextNoteTime += (60 / tempo) / 4;
+                step++;
+            }
+        }, 50);
+    }
+
+    function stopMusic() {
+        if (bgmInterval) {
+            clearInterval(bgmInterval);
+            bgmInterval = null;
+        }
+    }
+
+    // SFX
+    function playSound(type) {
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'shoot') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        } else if (type === 'ult_launch') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(400, t);
+            osc.frequency.linearRampToValueAtTime(1200, t + 0.5);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        } else if (type === 'hit') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+            gain.gain.setValueAtTime(0.15, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        } else if (type === 'eat') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.linearRampToValueAtTime(1200, t + 0.1);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.1);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        }
+    }
+
+    /**
+     * Initialization
+     */
+    function resize() {
+        const bottomPadding = window.innerWidth < 1024 ? 120 : 0; 
+        canvas.width = window.innerWidth - 20;
+        canvas.height = window.innerHeight - 20 - bottomPadding;
+        GRID_W = Math.floor(canvas.width / CELL_SIZE);
+        GRID_H = Math.floor(canvas.height / CELL_SIZE);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function initGame() {
+        snake = [
+            { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) },
+            { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) + 1 },
+            { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) + 2 }
+        ];
+        direction = { x: 0, y: -1 };
+        nextDirection = { x: 0, y: -1 };
+        bullets = [];
+        enemies = [];
+        particles = [];
+        score = 0;
+        playerHP = MAX_HP;
+        frames = 0;
+        ultTimer = 0;
+        screenShake = 0;
+        
+        spawnFood();
+        updateUI();
+        startMusic();
+    }
+
+    function startGame() {
+        startScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        gameState = 'PLAYING';
+        initGame();
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function restartGame() {
+        startGame();
+    }
+
+    function gameOver() {
+        gameState = 'GAMEOVER';
+        stopMusic();
+        
+        // Death sound
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.exponentialRampToValueAtTime(10, t + 1);
+        gain.gain.setValueAtTime(0.5, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 1);
+        osc.start(t);
+        osc.stop(t + 1);
+
+        finalScoreEl.innerText = score;
+        gameOverScreen.classList.remove('hidden');
+    }
+
+    /**
+     * Logic
+     */
+    function spawnFood() {
+        let valid = false;
+        while (!valid) {
+            const fx = Math.floor(Math.random() * GRID_W);
+            const fy = Math.floor(Math.random() * GRID_H);
+            const onSnake = snake.some(s => s.x === fx && s.y === fy);
+            if (!onSnake) {
+                food = { x: fx, y: fy, color: '#00ffaa' };
+                valid = true;
+            }
+        }
+    }
+
+    function spawnEnemy() {
+        const edge = Math.floor(Math.random() * 4);
+        let ex, ey;
+        if (edge === 0) { ex = Math.random() * GRID_W; ey = -1; }
+        else if (edge === 1) { ex = GRID_W; ey = Math.random() * GRID_H; }
+        else if (edge === 2) { ex = Math.random() * GRID_W; ey = GRID_H; }
+        else { ex = -1; ey = Math.random() * GRID_H; }
+
+        enemies.push({
+            x: ex,
+            y: ey,
+            hp: 1, // 1 Hit Kill for satisfaction
+            speed: 0.03 + (Math.random() * 0.02), // Keeping it manageable
+            color: '#ff3333'
+        });
+    }
+
+    function createExplosion(x, y, color, count = 10, speedMult = 1) {
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x: x * CELL_SIZE + CELL_SIZE/2,
+                y: y * CELL_SIZE + CELL_SIZE/2,
+                vx: (Math.random() - 0.5) * 8 * speedMult,
+                vy: (Math.random() - 0.5) * 8 * speedMult,
+                life: 1.0,
+                color: color
+            });
+        }
+    }
+
+    function shoot() {
+        if (gameState !== 'PLAYING') return;
+        playSound('shoot');
+        bullets.push({
+            x: snake[0].x,
+            y: snake[0].y,
+            vx: direction.x * 0.9,
+            vy: direction.y * 0.9,
+            isUlt: false
+        });
+    }
+
+    function useUltimate() {
+        if (gameState !== 'PLAYING') return;
+        if (ultTimer > 0) return;
+
+        playSound('ult_launch');
+        ultTimer = ULT_COOLDOWN_MAX;
+        
+        // Trigger Screen Shake
+        screenShake = 20;
+
+        const headX = snake[0].x;
+        const headY = snake[0].y;
+
+        // Multiple waves logic
+        let wave = 0;
+        const maxWaves = 3;
+        const bulletsPerWave = 16;
+        
+        const fireWave = () => {
+            if(gameState !== 'PLAYING') return;
+            
+            createExplosion(headX, headY, '#d0f', 15, 2); // Visual Pop
+            playSound('shoot'); // Extra sound per wave
+
+            for(let i=0; i<bulletsPerWave; i++) {
+                // Rotate each wave slightly
+                const angle = (Math.PI * 2 / bulletsPerWave) * i + (wave * 0.2);
+                bullets.push({
+                    x: headX,
+                    y: headY,
+                    vx: Math.cos(angle) * 1.2,
+                    vy: Math.sin(angle) * 1.2,
+                    isUlt: true,
+                    life: 100 // Ult bullets last longer
+                });
+            }
+            wave++;
+            if(wave < maxWaves) {
+                setTimeout(fireWave, 100); // 100ms delay between waves
+            }
+        };
+
+        fireWave();
+    }
+
+    function update(dt) {
+        frames++;
+        if (ultTimer > 0) ultTimer--;
+        if (screenShake > 0) screenShake *= 0.9; // Shake decay
+
+        // Snake Move
+        const moveInterval = 8;
+        if (frames % moveInterval === 0) {
+            direction = nextDirection;
+            let head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+            // Wrap
+            if (head.x < 0) head.x = GRID_W - 1;
+            if (head.x >= GRID_W) head.x = 0;
+            if (head.y < 0) head.y = GRID_H - 1;
+            if (head.y >= GRID_H) head.y = 0;
+
+            if (snake.some(s => s.x === head.x && s.y === head.y)) {
+                playerHP = 0;
+            }
+
+            if (playerHP <= 0) {
+                gameOver();
+                return;
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                playerHP = Math.min(playerHP + 10, MAX_HP);
+                playSound('eat');
+                createExplosion(food.x, food.y, '#00ffaa', 5);
+                spawnFood();
+            } else {
+                snake.pop();
+            }
+        }
+
+        // Bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+
+            // Cleanup
+            if (b.x < -5 || b.x > GRID_W + 5 || b.y < -5 || b.y > GRID_H + 5) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            // Hit Enemy
+            let hit = false;
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                let e = enemies[j];
+                const dist = Math.sqrt((b.x - e.x)**2 + (b.y - e.y)**2);
+                if (dist < 1.0) {
+                    e.hp--;
+                    createExplosion(e.x, e.y, '#ffff00', 5);
+                    playSound('hit');
+                    if (e.hp <= 0) {
+                        enemies.splice(j, 1);
+                        score += 50;
+                        createExplosion(e.x, e.y, '#ff0000', 20, 1.5);
+                        // Tiny shake on kill
+                        screenShake = Math.max(screenShake, 2);
+                    }
+                    if(!b.isUlt) {
+                        hit = true; // Normal bullets destroy on impact
+                    }
+                    break;
+                }
+            }
+            if(hit) bullets.splice(i, 1);
+        }
+
+        // Enemies
+        if (Math.random() < 0.015 + (score * 0.00002)) {
+            spawnEnemy();
+        }
+
+        const head = snake[0];
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            const dx = head.x - e.x;
+            const dy = head.y - e.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist > 0) {
+                e.x += (dx / dist) * e.speed;
+                e.y += (dy / dist) * e.speed;
+            }
+
+            if (dist < 0.8) {
+                playerHP -= 20;
+                createExplosion(head.x, head.y, '#ff0000', 10);
+                enemies.splice(i, 1);
+                playSound('hit');
+                screenShake = 10;
+            }
+        }
+
+        if (playerHP <= 0) gameOver();
+
+        // Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.05;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        updateUI();
+    }
+
+    function updateUI() {
+        scoreEl.innerText = score;
+        lengthEl.innerText = snake.length;
+        hpBar.style.width = Math.max(0, (playerHP / MAX_HP) * 100) + '%';
+        
+        if (playerHP < 30) hpBar.classList.replace('bg-red-600', 'bg-red-500'); // keep red but could flicker
+        
+        const pct = Math.max(0, 100 - (ultTimer / ULT_COOLDOWN_MAX * 100));
+        ultBar.style.width = pct + '%';
+        
+        if (ultTimer <= 0) {
+            ultBtnMobile.classList.add('ready');
+            ultBar.classList.add('bg-purple-400', 'shadow-[0_0_10px_#d0f]');
+            ultBar.classList.remove('bg-purple-800');
+        } else {
+            ultBtnMobile.classList.remove('ready');
+            ultBar.classList.remove('bg-purple-400', 'shadow-[0_0_10px_#d0f]');
+            ultBar.classList.add('bg-purple-800');
+        }
+    }
+
+    function draw() {
+        // Clear
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Screen Shake
+        if(screenShake > 0.5) {
+            const rx = (Math.random() - 0.5) * screenShake;
+            const ry = (Math.random() - 0.5) * screenShake;
+            ctx.translate(rx, ry);
+        }
+
+        // Grid
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= GRID_W; x++) ctx.moveTo(x * CELL_SIZE, 0), ctx.lineTo(x * CELL_SIZE, canvas.height);
+        for (let y = 0; y <= GRID_H; y++) ctx.moveTo(0, y * CELL_SIZE), ctx.lineTo(canvas.width, y * CELL_SIZE);
+        ctx.stroke();
+
+        // Snake
+        snake.forEach((segment, index) => {
+            const isHead = index === 0;
+            const x = segment.x * CELL_SIZE;
+            const y = segment.y * CELL_SIZE;
+            
+            ctx.shadowBlur = isHead ? 20 : 10;
+            ctx.shadowColor = isHead ? '#0ff' : '#0aa';
+            ctx.fillStyle = isHead ? '#fff' : '#0ff';
+            ctx.fillRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+        });
+
+        // Food
+        if (food) {
+            const x = food.x * CELL_SIZE + CELL_SIZE/2;
+            const y = food.y * CELL_SIZE + CELL_SIZE/2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = food.color;
+            ctx.fillStyle = food.color;
+            ctx.beginPath();
+            ctx.arc(x, y, CELL_SIZE/2 - 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Enemies
+        enemies.forEach(e => {
+            const x = e.x * CELL_SIZE;
+            const y = e.y * CELL_SIZE;
+            ctx.save();
+            ctx.translate(x + CELL_SIZE/2, y + CELL_SIZE/2);
+            ctx.rotate(frames * 0.1);
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#f00';
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            // Diamond shape
+            ctx.moveTo(0, -CELL_SIZE/2 + 2);
+            ctx.lineTo(CELL_SIZE/2 - 2, 0);
+            ctx.lineTo(0, CELL_SIZE/2 - 2);
+            ctx.lineTo(-CELL_SIZE/2 + 2, 0);
+            ctx.fill();
+            ctx.restore();
+        });
+
+        // Bullets
+        bullets.forEach(b => {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = b.isUlt ? '#d0f' : '#ff0';
+            ctx.fillStyle = b.isUlt ? '#f0f' : '#ff0';
+            ctx.beginPath();
+            const r = b.isUlt ? 6 : 4;
+            ctx.arc(b.x * CELL_SIZE + CELL_SIZE/2, b.y * CELL_SIZE + CELL_SIZE/2, r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Particles
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 0;
+            ctx.fillRect(p.x, p.y, 4, 4);
+        });
+        ctx.globalAlpha = 1.0;
+    }
+
+    function gameLoop(time) {
+        if (gameState !== 'PLAYING') return;
+        const dt = time - lastTime;
+        lastTime = time;
+        update(dt);
+        draw();
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    /**
+     * Input
+     */
+    function handleInput(key) {
+        if (gameState !== 'PLAYING') return;
+        const k = key.toLowerCase();
+
+        switch (k) {
+            case 'arrowup': case 'w': 
+                if (direction.y === 0) nextDirection = { x: 0, y: -1 }; break;
+            case 'arrowdown': case 's': 
+                if (direction.y === 0) nextDirection = { x: 0, y: 1 }; break;
+            case 'arrowleft': case 'a': 
+                if (direction.x === 0) nextDirection = { x: -1, y: 0 }; break;
+            case 'arrowright': case 'd': 
+                if (direction.x === 0) nextDirection = { x: 1, y: 0 }; break;
+            case 'j': 
+                shoot(); break;
+            case 'k': 
+                useUltimate(); break;
+        }
+    }
+
+    document.addEventListener('keydown', (e) => handleInput(e.key));
+
+    const btns = document.querySelectorAll('.btn');
+    btns.forEach(btn => {
+        const handlePress = (e) => {
+            e.preventDefault();
+            handleInput(btn.dataset.key);
+            btn.style.background = 'rgba(255, 255, 255, 0.4)';
+            setTimeout(() => btn.style.background = '', 100);
+        };
+        btn.addEventListener('touchstart', handlePress, {passive: false});
+        btn.addEventListener('mousedown', handlePress);
+    });
+
+    // Swipe
+    let touchStartX = 0, touchStartY = 0;
+    canvas.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, {passive: false});
+
+    canvas.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].screenX - touchStartX;
+        const dy = e.changedTouches[0].screenY - touchStartY;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            if (Math.abs(dx) > 30) handleInput(dx > 0 ? 'd' : 'a');
+        } else {
+            if (Math.abs(dy) > 30) handleInput(dy > 0 ? 's' : 'w');
+        }
+    }, {passive: false});
+    
+    document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+</script>
+</body>
+</html>
