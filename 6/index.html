@@ -332,7 +332,7 @@
     const CELL_SIZE = 25;
     let GRID_W, GRID_H;
     const MAX_HP = 100;
-    const ULT_COOLDOWN_MAX = 400; 
+    const ULT_COOLDOWN_MAX = 400; // slightly longer cooldown for op skill
     
     // Game State
     let animationId;
@@ -341,8 +341,6 @@
     let gameState = 'MENU';
     let frames = 0;
     let screenShake = 0;
-    let hitStop = 0; // Frames to pause for impact
-    let bgPulse = 0; // Background pulse intensity
 
     // Entities
     let snake = [];
@@ -351,7 +349,6 @@
     let bullets = [];
     let enemies = [];
     let particles = [];
-    let floatingTexts = []; // Pop-up numbers
     let food = null;
     let playerHP = MAX_HP;
     let ultTimer = 0;
@@ -362,6 +359,7 @@
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let bgmInterval = null;
 
+    // Instruments
     function playKick(time) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -378,11 +376,13 @@
     function playSnare(time) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
+        // Noise burst approximation using high triangle
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(100, time);
         gain.gain.setValueAtTime(0.2, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
         
+        // Add some noise (randomness is hard in pure oscillator, skipping for simplicity but adding high freq)
         const osc2 = audioCtx.createOscillator();
         osc2.type = 'square';
         osc2.frequency.setValueAtTime(800, time);
@@ -408,7 +408,8 @@
         const filter = audioCtx.createBiquadFilter();
         
         osc.type = 'sawtooth';
-        const freq = [55, 55, 65.41, 49].at(Math.floor(note/4) % 4) || 55;
+        // Simple bass progression
+        const freq = [55, 55, 65.41, 49].at(Math.floor(note/4) % 4) || 55; // A1, A1, C2, G1
         
         osc.frequency.setValueAtTime(freq, time);
         filter.type = 'lowpass';
@@ -432,27 +433,39 @@
         osc.frequency.setValueAtTime(8000, time);
         gain.gain.setValueAtTime(0.05, time);
         gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-        osc.connect(gain);
+        osc.connect(gain); // Highpass would be better but keeping simple
         gain.connect(audioCtx.destination);
         osc.start(time);
         osc.stop(time + 0.05);
     }
 
+    // BGM Sequencer
     function startMusic() {
         if (bgmInterval) return;
         if (audioCtx.state === 'suspended') audioCtx.resume();
         
-        const tempo = 140;
+        const tempo = 140; // BPM (Fast & Fiery)
+        const stepTime = (60 / tempo) * 1000 / 4; // 16th notes
         let step = 0;
         let nextNoteTime = audioCtx.currentTime;
 
+        // Pre-schedule logic
         bgmInterval = setInterval(() => {
             const now = audioCtx.currentTime;
+            // Schedule ahead
             while (nextNoteTime < now + 0.1) {
+                // Kick: 1, 5, 9, 13
                 if (step % 4 === 0) playKick(nextNoteTime);
+                
+                // Snare: 5, 13
                 if (step % 8 === 4) playSnare(nextNoteTime);
+                
+                // Bass: Off-beat driving 
                 if (step % 2 === 0) playBass(nextNoteTime, step/4);
+
+                // Hi-hat: every 2 steps
                 if (step % 2 === 0) playHiHat(nextNoteTime);
+                
                 nextNoteTime += (60 / tempo) / 4;
                 step++;
             }
@@ -466,6 +479,7 @@
         }
     }
 
+    // SFX
     function playSound(type) {
         const t = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
@@ -532,14 +546,11 @@
         bullets = [];
         enemies = [];
         particles = [];
-        floatingTexts = [];
         score = 0;
         playerHP = MAX_HP;
         frames = 0;
         ultTimer = 0;
         screenShake = 0;
-        hitStop = 0;
-        bgPulse = 0;
         
         spawnFood();
         updateUI();
@@ -563,6 +574,7 @@
         gameState = 'GAMEOVER';
         stopMusic();
         
+        // Death sound
         const t = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -607,8 +619,8 @@
         enemies.push({
             x: ex,
             y: ey,
-            hp: 1, 
-            speed: 0.03 + (Math.random() * 0.02),
+            hp: 1, // 1 Hit Kill for satisfaction
+            speed: 0.03 + (Math.random() * 0.02), // Keeping it manageable
             color: '#ff3333'
         });
     }
@@ -626,29 +638,20 @@
         }
     }
 
-    function addFloatingText(x, y, text, color) {
-        floatingTexts.push({
-            x: x * CELL_SIZE + CELL_SIZE/2,
-            y: y * CELL_SIZE + CELL_SIZE/2,
-            text: text,
-            color: color,
-            life: 40,
-            vy: -1
-        });
-    }
-
     function shoot() {
         if (gameState !== 'PLAYING') return;
         playSound('shoot');
-        bgPulse = 5; // Pulse on shoot
         
-        // Base angle
+        // Base angle from direction
         const baseAngle = Math.atan2(direction.y, direction.x);
-        // Fan fire
-        const bulletCount = 3; 
-        const spread = 0.5; // ~30 degrees
+        
+        // Fan fire settings (Shotgun style)
+        const bulletCount = 3; // 3 bullets at once
+        const spread = 0.5; // Spread angle in radians (~30 degrees)
         
         for (let i = 0; i < bulletCount; i++) {
+            // Calculate specific angle for this bullet
+            // Distribute bullets evenly across the spread angle centered on baseAngle
             const offset = -spread/2 + (spread * i / (bulletCount - 1));
             const angle = baseAngle + offset;
             
@@ -657,8 +660,7 @@
                 y: snake[0].y,
                 vx: Math.cos(angle) * 0.9,
                 vy: Math.sin(angle) * 0.9,
-                isUlt: false,
-                trail: [] // Trail history
+                isUlt: false
             });
         }
     }
@@ -670,22 +672,25 @@
         playSound('ult_launch');
         ultTimer = ULT_COOLDOWN_MAX;
         
+        // Trigger Screen Shake
         screenShake = 20;
-        bgPulse = 20;
 
         const headX = snake[0].x;
         const headY = snake[0].y;
 
+        // Multiple waves logic
         let wave = 0;
         const maxWaves = 3;
         const bulletsPerWave = 16;
         
         const fireWave = () => {
             if(gameState !== 'PLAYING') return;
-            createExplosion(headX, headY, '#d0f', 15, 2);
-            playSound('shoot'); 
+            
+            createExplosion(headX, headY, '#d0f', 15, 2); // Visual Pop
+            playSound('shoot'); // Extra sound per wave
 
             for(let i=0; i<bulletsPerWave; i++) {
+                // Rotate each wave slightly
                 const angle = (Math.PI * 2 / bulletsPerWave) * i + (wave * 0.2);
                 bullets.push({
                     x: headX,
@@ -693,13 +698,12 @@
                     vx: Math.cos(angle) * 1.2,
                     vy: Math.sin(angle) * 1.2,
                     isUlt: true,
-                    life: 100,
-                    trail: []
+                    life: 100 // Ult bullets last longer
                 });
             }
             wave++;
             if(wave < maxWaves) {
-                setTimeout(fireWave, 100);
+                setTimeout(fireWave, 100); // 100ms delay between waves
             }
         };
 
@@ -707,15 +711,9 @@
     }
 
     function update(dt) {
-        if (hitStop > 0) {
-            hitStop--;
-            return; // Freeze logic
-        }
-
         frames++;
         if (ultTimer > 0) ultTimer--;
-        if (screenShake > 0) screenShake *= 0.9;
-        if (bgPulse > 0) bgPulse *= 0.95;
+        if (screenShake > 0) screenShake *= 0.9; // Shake decay
 
         // Snake Move
         const moveInterval = 8;
@@ -723,6 +721,7 @@
             direction = nextDirection;
             let head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
+            // Wrap
             if (head.x < 0) head.x = GRID_W - 1;
             if (head.x >= GRID_W) head.x = 0;
             if (head.y < 0) head.y = GRID_H - 1;
@@ -744,7 +743,6 @@
                 playerHP = Math.min(playerHP + 10, MAX_HP);
                 playSound('eat');
                 createExplosion(food.x, food.y, '#00ffaa', 5);
-                addFloatingText(food.x, food.y, "+10", "#00ffaa");
                 spawnFood();
             } else {
                 snake.pop();
@@ -754,14 +752,10 @@
         // Bullets
         for (let i = bullets.length - 1; i >= 0; i--) {
             let b = bullets[i];
-            
-            // Trail logic
-            b.trail.push({x: b.x, y: b.y});
-            if(b.trail.length > 5) b.trail.shift();
-
             b.x += b.vx;
             b.y += b.vy;
 
+            // Cleanup
             if (b.x < -5 || b.x > GRID_W + 5 || b.y < -5 || b.y > GRID_H + 5) {
                 bullets.splice(i, 1);
                 continue;
@@ -780,13 +774,11 @@
                         enemies.splice(j, 1);
                         score += 50;
                         createExplosion(e.x, e.y, '#ff0000', 20, 1.5);
-                        addFloatingText(e.x, e.y, "+50", "#ffff00");
-                        screenShake = Math.max(screenShake, 5);
-                        hitStop = 3; // Freeze frame!
-                        bgPulse = 10;
+                        // Tiny shake on kill
+                        screenShake = Math.max(screenShake, 2);
                     }
                     if(!b.isUlt) {
-                        hit = true;
+                        hit = true; // Normal bullets destroy on impact
                     }
                     break;
                 }
@@ -816,8 +808,7 @@
                 createExplosion(head.x, head.y, '#ff0000', 10);
                 enemies.splice(i, 1);
                 playSound('hit');
-                screenShake = 15;
-                addFloatingText(head.x, head.y, "-20", "#ff0000");
+                screenShake = 10;
             }
         }
 
@@ -832,14 +823,6 @@
             if (p.life <= 0) particles.splice(i, 1);
         }
 
-        // Floating Texts
-        for (let i = floatingTexts.length - 1; i >= 0; i--) {
-            let t = floatingTexts[i];
-            t.y += t.vy; // Float up
-            t.life--;
-            if (t.life <= 0) floatingTexts.splice(i, 1);
-        }
-
         updateUI();
     }
 
@@ -847,7 +830,8 @@
         scoreEl.innerText = score;
         lengthEl.innerText = snake.length;
         hpBar.style.width = Math.max(0, (playerHP / MAX_HP) * 100) + '%';
-        if (playerHP < 30) hpBar.classList.replace('bg-red-600', 'bg-red-500');
+        
+        if (playerHP < 30) hpBar.classList.replace('bg-red-600', 'bg-red-500'); // keep red but could flicker
         
         const pct = Math.max(0, 100 - (ultTimer / ULT_COOLDOWN_MAX * 100));
         ultBar.style.width = pct + '%';
@@ -864,85 +848,27 @@
     }
 
     function draw() {
-        ctx.setTransform(1, 0, 0, 1, 0, 0); 
+        // Clear
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
         ctx.fillStyle = '#050505';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Screen Shake
-        let rx = 0, ry = 0;
         if(screenShake > 0.5) {
-            rx = (Math.random() - 0.5) * screenShake;
-            ry = (Math.random() - 0.5) * screenShake;
+            const rx = (Math.random() - 0.5) * screenShake;
+            const ry = (Math.random() - 0.5) * screenShake;
             ctx.translate(rx, ry);
         }
 
-        // Draw World - RGB Shift Effect (Simulated via simple offset for key elements if shake is high)
-        // Only doing simple shake to save performance, but adding color glitch to enemies/explosions
-        
-        // Grid (Pulsing)
-        ctx.strokeStyle = `rgba(0, 255, 255, ${0.1 + bgPulse * 0.02})`;
-        ctx.lineWidth = 1 + bgPulse * 0.1;
+        // Grid
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         for (let x = 0; x <= GRID_W; x++) ctx.moveTo(x * CELL_SIZE, 0), ctx.lineTo(x * CELL_SIZE, canvas.height);
         for (let y = 0; y <= GRID_H; y++) ctx.moveTo(0, y * CELL_SIZE), ctx.lineTo(canvas.width, y * CELL_SIZE);
         ctx.stroke();
 
-        // Draw Entities Function
-        function drawEntities(colorOverride = null, offset = {x:0, y:0}) {
-            // Enemies
-            enemies.forEach(e => {
-                const x = e.x * CELL_SIZE + offset.x;
-                const y = e.y * CELL_SIZE + offset.y;
-                ctx.save();
-                ctx.translate(x + CELL_SIZE/2, y + CELL_SIZE/2);
-                ctx.rotate(frames * 0.1);
-                ctx.shadowBlur = colorOverride ? 0 : 15;
-                ctx.shadowColor = '#f00';
-                ctx.fillStyle = colorOverride || '#f00';
-                ctx.beginPath();
-                ctx.moveTo(0, -CELL_SIZE/2 + 2);
-                ctx.lineTo(CELL_SIZE/2 - 2, 0);
-                ctx.lineTo(0, CELL_SIZE/2 - 2);
-                ctx.lineTo(-CELL_SIZE/2 + 2, 0);
-                ctx.fill();
-                ctx.restore();
-            });
-
-            // Bullets
-            bullets.forEach(b => {
-                // Trails
-                if(!colorOverride) {
-                    ctx.strokeStyle = b.isUlt ? `rgba(255, 0, 255, 0.5)` : `rgba(255, 255, 0, 0.5)`;
-                    ctx.lineWidth = b.isUlt ? 4 : 2;
-                    ctx.beginPath();
-                    b.trail.forEach((t, i) => {
-                        if(i===0) ctx.moveTo(t.x * CELL_SIZE + CELL_SIZE/2, t.y * CELL_SIZE + CELL_SIZE/2);
-                        else ctx.lineTo(t.x * CELL_SIZE + CELL_SIZE/2, t.y * CELL_SIZE + CELL_SIZE/2);
-                    });
-                    ctx.stroke();
-                }
-
-                ctx.shadowBlur = colorOverride ? 0 : 10;
-                ctx.shadowColor = b.isUlt ? '#d0f' : '#ff0';
-                ctx.fillStyle = colorOverride || (b.isUlt ? '#f0f' : '#ff0');
-                ctx.beginPath();
-                const r = b.isUlt ? 6 : 4;
-                ctx.arc(b.x * CELL_SIZE + CELL_SIZE/2 + offset.x, b.y * CELL_SIZE + CELL_SIZE/2 + offset.y, r, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-
-        // RGB Shift Effect during heavy shake
-        if (screenShake > 5) {
-            ctx.globalCompositeOperation = 'screen';
-            drawEntities('#f00', {x: 5, y: 0}); // Red Shift
-            drawEntities('#00f', {x: -5, y: 0}); // Blue Shift
-            ctx.globalCompositeOperation = 'source-over';
-        }
-        
-        drawEntities(); // Normal draw
-
-        // Snake (No RGB shift usually to keep player focused, or maybe slight)
+        // Snake
         snake.forEach((segment, index) => {
             const isHead = index === 0;
             const x = segment.x * CELL_SIZE;
@@ -966,24 +892,43 @@
             ctx.fill();
         }
 
+        // Enemies
+        enemies.forEach(e => {
+            const x = e.x * CELL_SIZE;
+            const y = e.y * CELL_SIZE;
+            ctx.save();
+            ctx.translate(x + CELL_SIZE/2, y + CELL_SIZE/2);
+            ctx.rotate(frames * 0.1);
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#f00';
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            // Diamond shape
+            ctx.moveTo(0, -CELL_SIZE/2 + 2);
+            ctx.lineTo(CELL_SIZE/2 - 2, 0);
+            ctx.lineTo(0, CELL_SIZE/2 - 2);
+            ctx.lineTo(-CELL_SIZE/2 + 2, 0);
+            ctx.fill();
+            ctx.restore();
+        });
+
+        // Bullets
+        bullets.forEach(b => {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = b.isUlt ? '#d0f' : '#ff0';
+            ctx.fillStyle = b.isUlt ? '#f0f' : '#ff0';
+            ctx.beginPath();
+            const r = b.isUlt ? 6 : 4;
+            ctx.arc(b.x * CELL_SIZE + CELL_SIZE/2, b.y * CELL_SIZE + CELL_SIZE/2, r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
         // Particles
         particles.forEach(p => {
             ctx.globalAlpha = p.life;
             ctx.fillStyle = p.color;
             ctx.shadowBlur = 0;
             ctx.fillRect(p.x, p.y, 4, 4);
-        });
-        ctx.globalAlpha = 1.0;
-
-        // Floating Text
-        floatingTexts.forEach(t => {
-            ctx.globalAlpha = t.life / 40;
-            ctx.fillStyle = t.color;
-            ctx.font = "bold 20px Orbitron";
-            ctx.textAlign = "center";
-            ctx.shadowBlur = 5;
-            ctx.shadowColor = t.color;
-            ctx.fillText(t.text, t.x, t.y);
         });
         ctx.globalAlpha = 1.0;
     }
