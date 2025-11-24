@@ -376,7 +376,7 @@
     function playKick(time) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.setValueAtTime(50, time);
         osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
         gain.gain.setValueAtTime(0.8, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
