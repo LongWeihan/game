@@ -641,13 +641,28 @@
     function shoot() {
         if (gameState !== 'PLAYING') return;
         playSound('shoot');
-        bullets.push({
-            x: snake[0].x,
-            y: snake[0].y,
-            vx: direction.x * 0.9,
-            vy: direction.y * 0.9,
-            isUlt: false
-        });
+        
+        // Base angle from direction
+        const baseAngle = Math.atan2(direction.y, direction.x);
+        
+        // Fan fire settings (Shotgun style)
+        const bulletCount = 3; // 3 bullets at once
+        const spread = 0.5; // Spread angle in radians (~30 degrees)
+        
+        for (let i = 0; i < bulletCount; i++) {
+            // Calculate specific angle for this bullet
+            // Distribute bullets evenly across the spread angle centered on baseAngle
+            const offset = -spread/2 + (spread * i / (bulletCount - 1));
+            const angle = baseAngle + offset;
+            
+            bullets.push({
+                x: snake[0].x,
+                y: snake[0].y,
+                vx: Math.cos(angle) * 0.9,
+                vy: Math.sin(angle) * 0.9,
+                isUlt: false
+            });
+        }
     }
 
     function useUltimate() {
